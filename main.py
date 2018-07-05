@@ -6,11 +6,22 @@ import wiimote
 import sys
 from transform import Transform
 from PyQt5 import  QtWidgets, QtCore, QtGui
+import wiimote_node
 
 
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
+        self.btaddr = "B8:AE:6E:50:05:32"  # set some example
+        # update timer
+        self.wiimote = None
+        self._acc_vals = []
+        self.update_timer = QtCore.QTimer()
+        self.update_timer.timeout.connect(self.update_all_sensors)
+        self.initUI()
+        self.connect_wiimote()
+
+    def initUI(self):
         # init window
         self.setGeometry(0, 0, 640, 720)
         self.window().setStyleSheet("background-color: white")
@@ -83,7 +94,89 @@ class Window(QtWidgets.QWidget):
         layout.addLayout(layoutSettings)
         layout.addLayout(layoutList)
         self.window().setLayout(layout)
+
+
+
+        #wiimote_node.WiimoteNode.connect_wiimote(self)
         self.show()
+
+
+#    def connect_wiimote(self):
+ #       self.wm = wiimote.connect("B8:AE:6E:50:05:32")
+
+    def connect_wiimote(self):
+        #self.btaddr = str(self.text.text()).strip()
+        if self.wiimote is not None:
+            self.wiimote.disconnect()
+            self.wiimote = None
+            print("connect")
+           # self.connect_button.setText("connect")
+            return
+        if len(self.btaddr) == 17:
+            print("connecting")
+            #self.connect_button.setText("connecting...")
+            self.wiimote = wiimote.connect(self.btaddr)
+            self.registerCallbacks() # registers callbacks on wiimote
+            if self.wiimote is None:
+                print("try again")
+                #self.connect_button.setText("try again")
+            else:
+             #   self.connect_button.setText("disconnect")
+              #  print("disconnect")
+                self.set_update_rate(30)
+
+    # registers callbacks to the cursor and the buttons
+    def registerCallbacks(self):
+        if self.wiimote is not None:
+            self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
+            self.wiimote.buttons.register_callback(self.getpressedButton)
+
+    def getpressedButton(self, ev):
+        x = self.cursor().pos().x()
+        y = self.cursor().pos().y()
+
+    def set_update_rate(self, rate):
+        if rate == 0:  # use callbacks for max. update rate
+            self.update_timer.stop()
+            self.wiimote.accelerometer.register_callback(self.update_accel)
+        else:
+            self.wiimote.accelerometer.unregister_callback(self.update_accel)
+            self.update_timer.start(1000.0/rate)
+
+    def update_all_sensors(self):
+        if self.wiimote is None:
+            return
+        self._acc_vals = self.wiimote.accelerometer
+        x, y, z = self._acc_vals
+       # print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
+        # todo: other sensors...
+        self.update()
+
+    def update_accel(self, acc_vals):
+        self._acc_vals = acc_vals
+        self.update()
+
+    def process_wiimote_ir_data(self,event):
+        if len(event) == 4:
+            leds = []
+
+            for led in event:
+                leds.append((led["x"], led["y"]))
+            P, DEST_W, DEST_H = (1024 /2, 768/2), 1024, 768
+
+        #while True:
+         #   if self.wm.buttons["B"]:
+          #      print("Gedrückt")
+
+            try:
+                # x,y = Transform.projective_transform(P, leds, DEST_W, DEST_H)
+
+                x, y = self.transform.transform(P, leds, DEST_W, DEST_H)
+            except Exception as e:
+                print(e)
+                x = y = -1
+
+            self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x,y)))
 
 
 def main():
@@ -93,6 +186,7 @@ def main():
     handleeFont = QtGui.QFont("Handlee")
     app.setFont(handleeFont)
     w = Window()
+
     sys.exit(app.exec_())
 
 if __name__ == '__main__':
