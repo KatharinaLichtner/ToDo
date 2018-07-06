@@ -12,7 +12,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.btaddr = "18:2A:7B:F3:F8:F5"
+        self.btaddr = "B8:AE:6E:1B:AD:A0"
         self.wiimote = None
         self._acc_vals = []
         self.update_timer = QtCore.QTimer()
@@ -50,17 +50,28 @@ class Window(QtWidgets.QWidget):
 
         # init tabs
         self.tab = QtWidgets.QTabWidget()
-        tabToDo = QtWidgets.QWidget()
+        self.tabToDo = QtWidgets.QWidget()
         tabDone = QtWidgets.QWidget()
-        self.tab.addTab(tabToDo, "To Do")
+        self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(tabDone, "Done")
 
         # listWidget ToDoList
+        # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
+        # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
+
+        self.drawGestures = QtWidgets.QWidget()
+        #self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.drawGestures.setStyleSheet("background-color: green")
+        self.drawGestures.setMouseTracking(True)
+        layout.addWidget(self.drawGestures)
+
         layoutListToDoWidget.addWidget(self.toDoList)
-        tabToDo.setLayout(layoutListToDoWidget)
-        self.toDoList.setStyleSheet("background-color: white")
+        self.tabToDo.setLayout(layoutListToDoWidget)
+        #self.tabToDo.setStyleSheet("background-color: green")
+        self.toDoList.setStyleSheet("background-color: blue")
         self.toDoList.setStyleSheet("QListWidget::indicator:unchecked{image: url(unchecked.svg)}")
 
         # listWidget DoneList
@@ -99,27 +110,18 @@ class Window(QtWidgets.QWidget):
         layout.addLayout(layoutSettings)
         layout.addLayout(layoutList)
         self.window().setLayout(layout)
-        self.toDoList.installEventFilter(self.toDoList)
         self.show()
-
-    def eventFilter(self, widget, event):
-        print(event)
-        return self.toDoList.eventFilter(self.toDoList, widget, event)
+        self.drawGestures.show()
+        self.drawGestures.activateWindow()
+        self.drawGestures.raise_()
 
     def connect_wiimote(self):
+        self.wiimote = wiimote.connect(self.btaddr)
+
         if self.wiimote is not None:
-            self.wiimote.disconnect()
-            self.wiimote = None
-            print("connect")
-            return
-        if len(self.btaddr) == 17:
-            print("connecting")
-            self.wiimote = wiimote.connect(self.btaddr)
-            if self.wiimote is None:
-                print("try again")
-            else:
-                print("disconnect")
-                self.set_update_rate(30)
+            self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
+            #self.wiimote.buttons.register_callback(self.getpressedButton)
+            self.set_update_rate(30)
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
@@ -189,16 +191,16 @@ class Window(QtWidgets.QWidget):
             self.pos = []
             self.update()
 
+    # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
-        if recognized == 0:
+        if recognized == "Circle":
             self.inputToDo.show()
-        if recognized == 1:
-            # get selected Item, remove and add to donelist
+        if recognized == "Check":
             item = self.toDoList.currentItem()
-            self.toDoList.removeItemWidget(item)
-            item.setCheckState(2)
-            self.doneList.addItem(item)
-            self.update()
+            self.toDoList.takeItem(self.toDoList.row(item))
+            newItem = QtWidgets.QListWidgetItem(item.text())
+            newItem.setCheckState(2)
+            self.doneList.addItem(newItem)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
