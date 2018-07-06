@@ -23,6 +23,15 @@ class Window(QtWidgets.QWidget):
         except Exception as e:
             print(e, ", no wiimote found")
 
+        # init status arrays for undo and redo
+        self.current = []
+        self.undoRedo = []
+        self.undoRedoTodo = []
+        self.undoRedoDone = []
+        self.undoRedoIndex = -1
+        self.status = ""
+
+
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setMouseTracking(True)
@@ -120,8 +129,67 @@ class Window(QtWidgets.QWidget):
 
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
-            #self.wiimote.buttons.register_callback(self.getpressedButton)
+            self.wiimote.buttons.register_callback(self.getPressedButton)
             self.set_update_rate(30)
+
+    # gets which button was pressed on the wiimote
+    def getPressedButton(self, ev):
+        x = self.cursor().pos().x()
+        y = self.cursor().pos().y()
+
+        # if the undo or the redo buttons were clicked while pressing the 'A'-Button on the wiimote, the action is
+        if self.wiimote.buttons["A"]:
+            xUndo = self.undoButton.pos().x()
+            yUndo = self.undoButton.pos().x()
+            xRedo = self.redoButton.pos().x()
+            yRedo = self.redoButton.pos().y()
+            if x > xUndo and x < xUndo + self.undoButton.width() and y > yUndo and y < yUndo + self.undoButton.height():
+                self.undo()
+
+            elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
+                self.redo()
+
+    # sets the status of the window to one status backwards
+    def undo(self):
+        self.undoRedoIndex -= 1
+        self.undoRedoTodoList()
+        self.undoRedoDoneList()
+        self.status = "undo"
+
+    # sets the status of the window to one status forward
+    def redo(self):
+        if self.undoRedoIndex + 1 <= -1:
+            self.undoRedoIndex += 1
+        self.undoRedoTodoList()
+        self.undoRedoDoneList()
+
+
+    # sets the to do list to a new state
+    def undoRedoTodoList(self):
+        if len(self.undoRedo) + self.undoRedoIndex >= 0:
+            self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
+        else:
+            self.undoRedoTodo = []
+        self.toDoList.clear()
+        for i in range(len(self.undoRedoTodo)):
+            if len(self.undoRedoTodo) is not 0:
+                item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
+                item.setCheckState(0)
+                self.toDoList.insertItem(0, item)
+        self.toDoList.show()
+
+    def undoRedoDoneList(self):
+        if len(self.undoRedo) + self.undoRedoIndex >= 0:
+            self.undoRedoDone = self.undoRedo[self.undoRedoIndex][1][:]
+        else:
+            self.undoRedoDone = []
+        self.doneList.clear()
+        for i in range(len(self.undoRedoDone)):
+            if len(self.undoRedoDone) is not 0:
+                item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
+                item.setCheckState(0)
+                self.doneList.insertItem(0, item)
+                self.doneList.show()
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
@@ -184,12 +252,15 @@ class Window(QtWidgets.QWidget):
 
     def mouseReleaseEvent(self, event):
         """when mouse is released the bool draw is set false"""
-        if event.button() == QtCore.Qt.LeftButton:
-            self.draw = False
-            recognized = self.recognizer.recognizeGesture(self.pos)
-            self.recognizedAction(recognized)
-            self.pos = []
-            self.update()
+        if len(self.pos) == 0:
+            print("no gesture made")
+        else:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.draw = False
+                recognized = self.recognizer.recognizeGesture(self.pos)
+                self.recognizedAction(recognized)
+                self.pos = []
+                self.update()
 
     # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
@@ -205,6 +276,15 @@ class Window(QtWidgets.QWidget):
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
             self.newEntry = self.editToDo.text()
+            self.undoRedoTodo.append(self.newEntry)
+            self.current = []
+            self.current.append(self.undoRedoTodo[:])
+            self.current.append(self.undoRedoDone[:])
+            if self.status == "undo":
+                self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
+                self.undoRedoIndex = -1
+                self.status = ""
+            self.undoRedo.append(self.current[:])
             self.editToDo.setText("")
             self.inputToDo.hide()
             item = QtWidgets.QListWidgetItem(self.newEntry)
