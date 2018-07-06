@@ -51,7 +51,9 @@ class Window(QtWidgets.QWidget):
 
         # layoutSettings with undo and redo buttons
         self.undoButton = QtWidgets.QPushButton("Undo")
+        self.undoButton.clicked.connect(self.undo)
         self.redoButton = QtWidgets.QPushButton("Redo")
+        self.redoButton.clicked.connect(self.redo)
         layoutSettings.addWidget(self.undoButton)
         layoutSettings.addWidget(self.redoButton)
         layoutSettings.setAlignment(QtCore.Qt.AlignTop)
