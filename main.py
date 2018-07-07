@@ -46,9 +46,9 @@ class Window(QtWidgets.QWidget):
         self.setGeometry(0, 0, 640, 720)
         self.window().setStyleSheet("background-color: white")
 
-        layout = QtWidgets.QVBoxLayout()
+        self.layout = QtWidgets.QVBoxLayout()
         layoutSettings = QtWidgets.QHBoxLayout()
-        layoutList = QtWidgets.QHBoxLayout()
+        self.layoutList = QtWidgets.QHBoxLayout()
 
         # layoutSettings with undo and redo buttons
         self.undoButton = QtWidgets.QPushButton("Undo")
@@ -56,23 +56,29 @@ class Window(QtWidgets.QWidget):
         self.redoButton = QtWidgets.QPushButton("Redo")
         self.redoButton.clicked.connect(self.redo)
         layoutSettings.addWidget(self.undoButton)
+
         layoutSettings.addWidget(self.redoButton)
         layoutSettings.setAlignment(QtCore.Qt.AlignTop)
         layoutSettings.setAlignment(QtCore.Qt.AlignRight)
 
         # init tabs
         self.tab = QtWidgets.QTabWidget()
-        tabToDo = QtWidgets.QWidget()
+        self.tabToDo = QtWidgets.QWidget()
         tabDone = QtWidgets.QWidget()
-        self.tab.addTab(tabToDo, "To Do")
+        self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(tabDone, "Done")
+        self.layoutList.addWidget(self.tab)
 
         # listWidget ToDoList
+        # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
+        # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
+
         layoutListToDoWidget.addWidget(self.toDoList)
-        tabToDo.setLayout(layoutListToDoWidget)
-        self.toDoList.setStyleSheet("background-color: white")
+        self.tabToDo.setLayout(layoutListToDoWidget)
+        #self.tabToDo.setStyleSheet("background-color: green")
+        self.toDoList.setStyleSheet("background-color: blue")
         self.toDoList.setStyleSheet("QListWidget::indicator:unchecked{image: url(unchecked.svg)}")
 
         # listWidget DoneList
@@ -82,8 +88,6 @@ class Window(QtWidgets.QWidget):
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
         tabDone.setLayout(layoutListDoneWidget)
-
-        layoutList.addWidget(self.tab)
 
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
@@ -107,17 +111,20 @@ class Window(QtWidgets.QWidget):
         layoutPopup.addLayout(layoutButtons)
         self.inputToDo.setLayout(layoutPopup)
 
+        #self.drawGestures = QtWidgets.QWidget()
+        #self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        #self.drawGestures.setStyleSheet("background-color: green")
+
+        #self.layout.addWidget(self.drawGestures)
+
+
         # adding layouts tab und Settings to window
-        layout.addLayout(layoutSettings)
-        layout.addLayout(layoutList)
-        self.window().setLayout(layout)
-        self.toDoList.installEventFilter(self.toDoList)
+        self.layout.addLayout(layoutSettings)
+        self.layout.addLayout(self.layoutList)
+        self.window().setLayout(self.layout)
         self.show()
-
-    def eventFilter(self, widget, event):
-        print(event)
-        return self.toDoList.eventFilter(self.toDoList, widget, event)
-
 
     def connect_wiimote(self):
         self.wiimote = wiimote.connect(self.btaddr)
@@ -184,8 +191,7 @@ class Window(QtWidgets.QWidget):
                 item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
                 item.setCheckState(0)
                 self.doneList.insertItem(0, item)
-        self.doneList.show()
-
+                self.doneList.show()
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
@@ -200,7 +206,7 @@ class Window(QtWidgets.QWidget):
             return
         self._acc_vals = self.wiimote.accelerometer
         x, y, z = self._acc_vals
-        #print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
+        print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
         # todo: other sensors...
         self.update()
 
@@ -242,6 +248,7 @@ class Window(QtWidgets.QWidget):
     def paintEvent(self, event):
         """the cursor movement is drawn if bool for drawing is true"""
         self.qp.begin(self)
+        self.qp.setPen(QtGui.QColor(255,105,180))
         if len(self.pos) > 1:
             for i in range(len(self.pos)-1):
                 self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
@@ -259,16 +266,27 @@ class Window(QtWidgets.QWidget):
                 self.pos = []
                 self.update()
 
+    # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
-        if recognized == 0:
+        if recognized == "Circle":
+            self.editToDo.setFocus()
             self.inputToDo.show()
-        if recognized == 1:
-            # get selected Item, remove and add to donelist
-            item = self.toDoList.currentItem()
-            self.toDoList.removeItemWidget(item)
-            item.setCheckState(2)
-            self.doneList.addItem(item)
-            self.update()
+        elif recognized == "Check":
+            if self.toDoList.currentItem() is not None:
+                item = self.toDoList.currentItem()
+                self.toDoList.takeItem(self.toDoList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(2)
+                self.doneList.insertItem(0, newItem)
+                self.doneList.setCurrentItem(newItem)
+        elif recognized == "Uncheck":
+            if self.doneList.currentItem() is not None:
+                item = self.doneList.currentItem()
+                self.doneList.takeItem(self.doneList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(0)
+                self.toDoList.insertItem(0, newItem)
+                self.toDoList.setCurrentItem(newItem)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
@@ -287,6 +305,7 @@ class Window(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(self.newEntry)
             item.setCheckState(0)
             self.toDoList.insertItem(0, item)
+            self.toDoList.setCurrentItem(item)
         elif self.sender().text() == self.cancelButton.text():
             self.inputToDo.hide()
 
