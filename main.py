@@ -33,7 +33,6 @@ class Window(QtWidgets.QWidget):
         self.undoRedoIndex = -1
         self.status = ""
 
-
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setMouseTracking(True)
@@ -240,6 +239,7 @@ class Window(QtWidgets.QWidget):
 
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
+
         if self.draw:
             point = (event.x(), event.y())
             self.pos.append(point)
