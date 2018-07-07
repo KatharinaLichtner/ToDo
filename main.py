@@ -17,11 +17,13 @@ class Window(QtWidgets.QWidget):
         self._acc_vals = []
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_all_sensors)
-        self.initUI()
+
         try:
             self.connect_wiimote()
         except Exception as e:
             print(e, ", no wiimote found")
+
+        self.initUI()
 
         # init status arrays for undo and redo
         self.current = []
@@ -45,9 +47,9 @@ class Window(QtWidgets.QWidget):
         self.setGeometry(0, 0, 640, 720)
         self.window().setStyleSheet("background-color: white")
 
-        layout = QtWidgets.QVBoxLayout()
+        self.layout = QtWidgets.QVBoxLayout()
         layoutSettings = QtWidgets.QHBoxLayout()
-        layoutList = QtWidgets.QHBoxLayout()
+        self.layoutList = QtWidgets.QHBoxLayout()
 
         # layoutSettings with undo and redo buttons
         self.undoButton = QtWidgets.QPushButton("Undo")
@@ -55,6 +57,7 @@ class Window(QtWidgets.QWidget):
         self.redoButton = QtWidgets.QPushButton("Redo")
         self.redoButton.clicked.connect(self.redo)
         layoutSettings.addWidget(self.undoButton)
+
         layoutSettings.addWidget(self.redoButton)
         layoutSettings.setAlignment(QtCore.Qt.AlignTop)
         layoutSettings.setAlignment(QtCore.Qt.AlignRight)
@@ -65,19 +68,13 @@ class Window(QtWidgets.QWidget):
         tabDone = QtWidgets.QWidget()
         self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(tabDone, "Done")
+        self.layoutList.addWidget(self.tab)
 
         # listWidget ToDoList
         # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
-
-        self.drawGestures = QtWidgets.QWidget()
-        #self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-        #self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        self.drawGestures.setStyleSheet("background-color: green")
-        self.drawGestures.setMouseTracking(True)
-        layout.addWidget(self.drawGestures)
 
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
@@ -92,8 +89,6 @@ class Window(QtWidgets.QWidget):
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
         tabDone.setLayout(layoutListDoneWidget)
-
-        layoutList.addWidget(self.tab)
 
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
@@ -117,14 +112,20 @@ class Window(QtWidgets.QWidget):
         layoutPopup.addLayout(layoutButtons)
         self.inputToDo.setLayout(layoutPopup)
 
+        #self.drawGestures = QtWidgets.QWidget()
+        #self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        #self.drawGestures.setStyleSheet("background-color: green")
+
+        #self.layout.addWidget(self.drawGestures)
+
+
         # adding layouts tab und Settings to window
-        layout.addLayout(layoutSettings)
-        layout.addLayout(layoutList)
-        self.window().setLayout(layout)
+        self.layout.addLayout(layoutSettings)
+        self.layout.addLayout(self.layoutList)
+        self.window().setLayout(self.layout)
         self.show()
-        self.drawGestures.show()
-        self.drawGestures.activateWindow()
-        self.drawGestures.raise_()
 
     def connect_wiimote(self):
         self.wiimote = wiimote.connect(self.btaddr)
@@ -247,6 +248,7 @@ class Window(QtWidgets.QWidget):
     def paintEvent(self, event):
         """the cursor movement is drawn if bool for drawing is true"""
         self.qp.begin(self)
+        self.qp.setPen(QtGui.QColor(255,105,180))
         if len(self.pos) > 1:
             for i in range(len(self.pos)-1):
                 self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
@@ -267,13 +269,24 @@ class Window(QtWidgets.QWidget):
     # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
         if recognized == "Circle":
+            self.editToDo.setFocus()
             self.inputToDo.show()
-        if recognized == "Check":
-            item = self.toDoList.currentItem()
-            self.toDoList.takeItem(self.toDoList.row(item))
-            newItem = QtWidgets.QListWidgetItem(item.text())
-            newItem.setCheckState(2)
-            self.doneList.addItem(newItem)
+        elif recognized == "Check":
+            if self.toDoList.currentItem() is not None:
+                item = self.toDoList.currentItem()
+                self.toDoList.takeItem(self.toDoList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(2)
+                self.doneList.insertItem(0, newItem)
+                self.doneList.setCurrentItem(newItem)
+        elif recognized == "Uncheck":
+            if self.doneList.currentItem() is not None:
+                item = self.doneList.currentItem()
+                self.doneList.takeItem(self.doneList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(0)
+                self.toDoList.insertItem(0, newItem)
+                self.toDoList.setCurrentItem(newItem)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
@@ -292,6 +305,7 @@ class Window(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(self.newEntry)
             item.setCheckState(0)
             self.toDoList.insertItem(0, item)
+            self.toDoList.setCurrentItem(item)
         elif self.sender().text() == self.cancelButton.text():
             self.inputToDo.hide()
 
