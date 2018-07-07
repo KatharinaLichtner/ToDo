@@ -159,7 +159,6 @@ class Window(QtWidgets.QWidget):
         self.undoRedoTodoList()
         self.undoRedoDoneList()
         self.status = "undo"
-        print("undo", self.undoRedo)
 
     # sets the status of the window to one status forward
     def redo(self):
@@ -167,15 +166,11 @@ class Window(QtWidgets.QWidget):
             self.undoRedoIndex += 1
         self.undoRedoTodoList()
         self.undoRedoDoneList()
-        print("redo", self.undoRedo)
-
 
     # sets the to do list to a new state
     def undoRedoTodoList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
-        #else:
-         #   self.undoRedoTodo = self.undoRedoTodo[0][:]
         self.toDoList.clear()
         for i in range(len(self.undoRedoTodo)):
             if len(self.undoRedoTodo) is not 0:
@@ -184,11 +179,10 @@ class Window(QtWidgets.QWidget):
                 self.toDoList.addItem(item)
         self.toDoList.show()
 
+    # sets the done list to a new state
     def undoRedoDoneList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoDone = self.undoRedo[self.undoRedoIndex][1][:]
-        #else:
-         #   self.undoRedoDone = self.undoRedoDone[0][:]
         self.doneList.clear()
         for i in range(len(self.undoRedoDone)):
             if len(self.undoRedoDone) is not 0:
@@ -203,7 +197,6 @@ class Window(QtWidgets.QWidget):
         self.current.append(self.undoRedoTodo[:])
         self.current.append(self.undoRedoDone[:])
         if self.status == "undo":
-            print("vorher", self.undoRedo)
             self.undoRedo = self.undoRedo[:(self.undoRedoIndex + 1)][:]
             self.undoRedoIndex = -1
             self.status = ""
@@ -211,7 +204,6 @@ class Window(QtWidgets.QWidget):
         if len(self.undoRedo) > self.undoRedoLength:
             length = len(self.undoRedo) - self.undoRedoLength
             self.undoRedo = self.undoRedo[length:][:]
-        print("undoredo", self.undoRedo)
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
@@ -288,8 +280,9 @@ class Window(QtWidgets.QWidget):
     # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
         if recognized == "Circle":
+            self.editToDo.setFocus()
             self.inputToDo.show()
-        if recognized == "Check":
+        elif recognized == "Check":
             item = self.toDoList.currentItem()
             self.undoRedoDone.append(item.text())
             del self.undoRedoTodo[self.toDoList.row(item)]
@@ -298,6 +291,15 @@ class Window(QtWidgets.QWidget):
             newItem = QtWidgets.QListWidgetItem(item.text())
             newItem.setCheckState(2)
             self.doneList.insertItem(0, newItem)
+            self.doneList.setCurrentItem(newItem)
+        elif recognized == "Uncheck":
+            if self.doneList.currentItem() is not None:
+                item = self.doneList.currentItem()
+                self.doneList.takeItem(self.doneList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(0)
+                self.toDoList.insertItem(0, newItem)
+                self.toDoList.setCurrentItem(newItem)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
@@ -309,6 +311,7 @@ class Window(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(self.newEntry)
             item.setCheckState(0)
             self.toDoList.insertItem(0, item)
+            self.toDoList.setCurrentItem(item)
         elif self.sender().text() == self.cancelButton.text():
             self.inputToDo.hide()
 
