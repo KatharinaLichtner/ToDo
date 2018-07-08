@@ -7,6 +7,10 @@ import sys
 from recognizer import Recognizer
 from transform import Transform
 from PyQt5 import QtWidgets, QtCore, QtGui
+from pylab import *
+from scipy import fft
+from sklearn import svm
+import numpy as np
 
 
 class Window(QtWidgets.QWidget):
@@ -32,6 +36,7 @@ class Window(QtWidgets.QWidget):
         self.undoRedoDone = []
         self.undoRedoIndex = -1
         self.status = ""
+
 
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -81,6 +86,7 @@ class Window(QtWidgets.QWidget):
         self.toDoList.setStyleSheet("background-color: blue")
         self.toDoList.setStyleSheet("QListWidget::indicator:unchecked{image: url(unchecked.svg)}")
 
+
         # listWidget DoneList
         self.doneList = QtWidgets.QListWidget()
         self.doneList.setStyleSheet("background-color: white")
@@ -118,7 +124,8 @@ class Window(QtWidgets.QWidget):
         #self.drawGestures.setStyleSheet("background-color: green")
 
         #self.layout.addWidget(self.drawGestures)
-
+        self.toDoList.itemClicked.connect(self.checkItemOnList)
+        self.doneList.itemClicked.connect(self.checkItemOnList)
 
         # adding layouts tab und Settings to window
         self.layout.addLayout(layoutSettings)
@@ -239,7 +246,6 @@ class Window(QtWidgets.QWidget):
 
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
-
         if self.draw:
             point = (event.x(), event.y())
             self.pos.append(point)
@@ -285,8 +291,26 @@ class Window(QtWidgets.QWidget):
                 self.doneList.takeItem(self.doneList.row(item))
                 newItem = QtWidgets.QListWidgetItem(item.text())
                 newItem.setCheckState(0)
+                newItem.checkState()
                 self.toDoList.insertItem(0, newItem)
                 self.toDoList.setCurrentItem(newItem)
+
+    def checkItemOnList(self, item):
+        if item.checkState() == 2:
+            self.toDoList.takeItem(self.toDoList.row(item))
+            newItem = QtWidgets.QListWidgetItem(item.text())
+            newItem.setCheckState(2)
+            self.doneList.insertItem(0, newItem)
+            self.doneList.setCurrentItem(newItem)
+        elif item.checkState() == 0:
+            self.doneList.takeItem(self.doneList.row(item))
+            newItem = QtWidgets.QListWidgetItem(item.text())
+            newItem.setCheckState(0)
+            newItem.checkState()
+            self.toDoList.insertItem(0, newItem)
+            self.toDoList.setCurrentItem(newItem)
+
+
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
