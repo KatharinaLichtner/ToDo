@@ -1391,11 +1391,31 @@ class Window(QtWidgets.QWidget):
             yUndo = self.undoButton.pos().x()
             xRedo = self.redoButton.pos().x()
             yRedo = self.redoButton.pos().y()
+
             if x > xUndo and x < xUndo + self.undoButton.width() and y > yUndo and y < yUndo + self.undoButton.height():
                 self.undo()
 
             elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
                 self.redo()
+            elif self.predicted == 0:
+                # löschen des listeneintrags
+                print("löschen")
+                item = self.toDoList.currentRow()
+
+                print("akutelles Item", item)
+                self.toDoList.takeItem(item)
+                self.toDoList.setCurrentIndex(1)
+                #print(self.toDoList.i)
+        if self.wiimote.buttons['Plus']:
+            #item um 1 hoch bewegen
+            print("ein nach oben")
+        if self.wiimote.buttons['Minus']:
+            #item um
+            print("ein nach unten")
+        if self.wiimote.buttons['Plus'] and self.predicted == 1:
+            print("ganz nach oben")
+        if self.wiimote.buttons['Minus'] and self.predicted == 1:
+            print("ganz nach unten")
 
     # sets the status of the window to one status backwards
     def undo(self):
@@ -1488,15 +1508,14 @@ class Window(QtWidgets.QWidget):
 
         avg = np.fft.fft(self._avg / len(self._avg))
         avgfft = abs(avg)
-        #self.svm(avgfft)
         return avgfft
 
 
 
     def svm(self, data):
         self.c.fit(self.trainingDataTest, self.featureVector)
-        predicted = self.c.predict([data[1:]])
-        print("Predicted", predicted)
+        self.predicted = self.c.predict([data[1:]])
+       # print("Predicted", self.predicted)
 
 
 
