@@ -69,6 +69,7 @@ class Window(QtWidgets.QWidget):
         self.tab = QtWidgets.QTabWidget()
         self.tabToDo = QtWidgets.QWidget()
         tabDone = QtWidgets.QWidget()
+        tabDone.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(tabDone, "Done")
         self.layoutList.addWidget(self.tab)
@@ -78,14 +79,17 @@ class Window(QtWidgets.QWidget):
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
+        self.tab.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.toDoList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
 
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
+        self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.toDoList.setStyleSheet("QListWidget::indicator:unchecked{image: url(unchecked.svg)}")
 
         # listWidget DoneList
         self.doneList = QtWidgets.QListWidget()
-        self.doneList.setStyleSheet("background-color: white")
+        self.doneList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.doneList.setStyleSheet("QListWidget::indicator:checked{image: url(checked.svg)}")
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
@@ -117,14 +121,23 @@ class Window(QtWidgets.QWidget):
         self.inputToDo.setLayout(layoutPopup)
 
         self.drawGestures = QtWidgets.QWidget()
+        self.drawGestures.setGeometry(0, 0, 740, 620)
         self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
         self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
-        self.layoutList.addWidget(self.drawGestures)
+        #self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents(False))
+        #self.drawGestures.setStyleSheet("background-color: green;")
 
+        self.tab.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+       # self.drawGestures.show()
+        #self.drawGestures.activateWindow()
+        #self.drawGestures.raise_()
+        #self.drawGestures.setEnabled(True)
         # adding layouts tab und Settings to window
         self.layout.addLayout(layoutSettings)
+
         self.layout.addLayout(self.layoutList)
+        #self.layoutList.addWidget(self.drawGestures)
+        #self.layout.setStackingMode(QtWidgets.QStackedLayout.StackAll)
         self.window().setLayout(self.layout)
         self.show()
 
@@ -134,7 +147,7 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(30)
+            #self.set_update_rate(30)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
@@ -152,10 +165,11 @@ class Window(QtWidgets.QWidget):
 
             elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
                 self.redo()
+
         if self.wiimote.buttons["B"]:
-            #self.drawGestures.show()
-            #self.drawGestures.activateWindow()
-            #self.drawGestures.raise_()
+            self.drawGestures.show()
+            self.drawGestures.activateWindow()
+            self.drawGestures.raise_()
             self.tab.hide()
             if self.draw is False:
                 self.pos = []
@@ -168,8 +182,8 @@ class Window(QtWidgets.QWidget):
                 self.update()
         else:
             self.draw = False
-            #self.drawGestures.hide()
-            #self.tab.show()
+#            self.drawGestures.hide()
+           # self.tab.show()
             #self.tab.activateWindow()
             #self.tab.raise_()
 
@@ -186,6 +200,7 @@ class Window(QtWidgets.QWidget):
             self.undoRedoIndex += 1
         self.undoRedoTodoList()
         self.undoRedoDoneList()
+
 
     # sets the to do list to a new state
     def undoRedoTodoList(self):
@@ -247,17 +262,27 @@ class Window(QtWidgets.QWidget):
                 return -1, -1
 
             P, DEST_W, DEST_H = (1024 / 2, 768 / 2), 1280, 676
-
-            x, y = self.transform.transform(P, leds, DEST_W, DEST_H)
-
+            try:
+                x, y = self.transform.transform(P, leds, DEST_W, DEST_H)
+            except Exception as e:
+                print(e)
+                x = y = -1
             self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
     def keyPressEvent(self, event):
         if event.text() == 'b':
-            self.drawGestures.show()
-            self.drawGestures.activateWindow()
-            self.drawGestures.raise_()
-            self.tab.hide()
+            #self.drawGestures.show()
+            #self.drawGestures.activateWindow()
+            #self.drawGestures.raise_()
+            self.tab.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+            self.tab.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+            self.tab.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+            self.tabToDo.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+            self.tabToDo.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            self.toDoList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+            self.toDoList.setWindowFlag(QtCore.Qt.FramelessWindowHint)
+            self.toDoList.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
 
     def mousePressEvent(self, event):
         """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
