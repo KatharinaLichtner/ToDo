@@ -3,7 +3,6 @@
 # -*- coding: utf-8 -*-
 
 import wiimote
-import sys
 from recognizer import Recognizer
 from transform import Transform
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -11,7 +10,53 @@ from pylab import *
 from scipy import fft
 from sklearn import svm
 import numpy as np
+import sys
 
+class DrawWidget(QtWidgets.QWidget):
+    def __init__(self, parent):
+        super(DrawWidget, self).__init__()
+
+        self.setMouseTracking(True)
+        self.qp = QtGui.QPainter()
+        self.pos = []
+        self.draw = False
+        self.parent = parent
+
+    def mousePressEvent(self, event):
+        """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
+        so that a new gesture can be drawn"""
+        if event.button() == QtCore.Qt.LeftButton:
+            self.draw = True
+            self.raise_()
+
+        self.update()
+
+    def mouseMoveEvent(self, event):
+        """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
+        if self.draw:
+            point = (event.x(), event.y())
+            print("P", point)
+            self.pos.append(point)
+            self.update()
+
+    def paintEvent(self, event):
+        """the cursor movement is drawn if bool for drawing is true"""
+        self.qp.begin(self)
+        self.qp.setPen(QtGui.QColor(255,105,180))
+        if len(self.pos) > 1:
+            for i in range(len(self.pos)-1):
+                self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
+        self.qp.end()
+
+    def mouseReleaseEvent(self, event):
+        """when mouse is released the bool draw is set false"""
+        if len(self.pos) == 0:
+            print("no gesture made")
+        else:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.draw = False
+                self.parent.raiseWidgets()
+                self.update()
 
 class Window(QtWidgets.QWidget):
     def __init__(self):
@@ -47,12 +92,16 @@ class Window(QtWidgets.QWidget):
 
     def initUI(self):
         # init window
-        self.setGeometry(0, 0, 640, 720)
-        self.window().setStyleSheet("background-color: white")
+        self.setGeometry(0, 0, 1280, 676)
+        self.setStyleSheet("background-color: white")
 
         self.layout = QtWidgets.QVBoxLayout()
         layoutSettings = QtWidgets.QHBoxLayout()
         self.layoutList = QtWidgets.QHBoxLayout()
+
+        self.draw_widget = DrawWidget(self)
+        self.draw_widget.setParent(self)
+        self.draw_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
 
         # layoutSettings with undo and redo buttons
         self.undoButton = QtWidgets.QPushButton("Undo")
@@ -69,7 +118,6 @@ class Window(QtWidgets.QWidget):
         self.tab = QtWidgets.QTabWidget()
         self.tabToDo = QtWidgets.QWidget()
         tabDone = QtWidgets.QWidget()
-        tabDone.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(tabDone, "Done")
         self.layoutList.addWidget(self.tab)
@@ -79,8 +127,6 @@ class Window(QtWidgets.QWidget):
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
-        self.tab.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        self.toDoList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
 
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
@@ -120,24 +166,10 @@ class Window(QtWidgets.QWidget):
         layoutPopup.addLayout(layoutButtons)
         self.inputToDo.setLayout(layoutPopup)
 
-        self.drawGestures = QtWidgets.QWidget()
-        self.drawGestures.setGeometry(0, 0, 740, 620)
-        self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-        self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        #self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents(False))
-        #self.drawGestures.setStyleSheet("background-color: green;")
-
-        self.tab.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
-       # self.drawGestures.show()
-        #self.drawGestures.activateWindow()
-        #self.drawGestures.raise_()
-        #self.drawGestures.setEnabled(True)
         # adding layouts tab und Settings to window
         self.layout.addLayout(layoutSettings)
 
         self.layout.addLayout(self.layoutList)
-        #self.layoutList.addWidget(self.drawGestures)
-        #self.layout.setStackingMode(QtWidgets.QStackedLayout.StackAll)
         self.window().setLayout(self.layout)
         self.show()
 
@@ -155,7 +187,7 @@ class Window(QtWidgets.QWidget):
         y = self.cursor().pos().y()
 
         # if the undo or the redo buttons were clicked while pressing the 'A'-Button on the wiimote, the action is
-        if self.wiimote.buttons["A"]:
+        """if self.wiimote.buttons["A"]:
             xUndo = self.undoButton.pos().x()
             yUndo = self.undoButton.pos().x()
             xRedo = self.redoButton.pos().x()
@@ -164,28 +196,21 @@ class Window(QtWidgets.QWidget):
                 self.undo()
 
             elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
-                self.redo()
+                self.redo()"""
 
         if self.wiimote.buttons["B"]:
-            self.drawGestures.show()
-            self.drawGestures.activateWindow()
-            self.drawGestures.raise_()
-            self.tab.hide()
-            if self.draw is False:
+            if not self.draw:
                 self.pos = []
-                self.update()
+
             self.draw = True
-            if self.draw:
-                x = self.cursor().pos().x()
-                y = self.cursor().pos().y()
-                self.pos.append((x, y))
-                self.update()
+
+            self.pos.append((x, y))
+            self.update()
         else:
             self.draw = False
-#            self.drawGestures.hide()
-           # self.tab.show()
-            #self.tab.activateWindow()
-            #self.tab.raise_()
+            self.pos = []
+
+        self.update()
 
     # sets the status of the window to one status backwards
     def undo(self):
@@ -244,11 +269,9 @@ class Window(QtWidgets.QWidget):
         x, y, z = self._acc_vals
         print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
         # todo: other sensors...
-        self.update()
 
     def update_accel(self, acc_vals):
         self._acc_vals = acc_vals
-        self.update()
 
     def process_wiimote_ir_data(self,event):
         if len(event) == 4:
@@ -267,36 +290,26 @@ class Window(QtWidgets.QWidget):
             except Exception as e:
                 print(e)
                 x = y = -1
-            self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
-    def keyPressEvent(self, event):
-        if event.text() == 'b':
-            #self.drawGestures.show()
-            #self.drawGestures.activateWindow()
-            #self.drawGestures.raise_()
-            self.tab.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-            self.tab.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-            self.tab.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
-            self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-            self.tabToDo.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-            self.tabToDo.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
-            self.toDoList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-            self.toDoList.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-            self.toDoList.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
     def mousePressEvent(self, event):
         """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
         so that a new gesture can be drawn"""
-        if event.button() == QtCore.Qt.LeftButton:
+        if event.button() == QtCore.Qt.RightButton:
             self.draw = True
-            self.update()
+            self.draw_widget.activateWindow()
+            self.draw_widget.raise_()
+
+        self.update()
+
 
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
         if self.draw:
             point = (event.x(), event.y())
             self.pos.append(point)
-            self.update()
+            #self.update()
 
     def paintEvent(self, event):
         """the cursor movement is drawn if bool for drawing is true"""
@@ -312,12 +325,24 @@ class Window(QtWidgets.QWidget):
         if len(self.pos) == 0:
             print("no gesture made")
         else:
-            if event.button() == QtCore.Qt.LeftButton:
+            if event.button() == QtCore.Qt.RightButton:
                 self.draw = False
+                self.undoButton.raise_()
+                self.redoButton.raise_()
+                self.tab.raise_()
+                self.tabToDo.raise_()
+                self.toDoList.raise_()
                 recognized = self.recognizer.recognizeGesture(self.pos)
                 self.recognizedAction(recognized)
                 self.pos = []
                 self.update()
+
+    def raiseWidgets(self):
+        self.undoButton.raise_()
+        self.redoButton.raise_()
+        self.tab.raise_()
+        self.tabToDo.raise_()
+        self.toDoList.raise_()
 
     # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
@@ -377,10 +402,6 @@ class Window(QtWidgets.QWidget):
             self.toDoList.setCurrentItem(item)
         elif self.sender().text() == self.cancelButton.text():
             self.inputToDo.hide()
-        self.drawGestures.hide()
-        self.tab.show()
-        self.tab.activateWindow()
-        self.tab.raise_()
 
 
 def main():
