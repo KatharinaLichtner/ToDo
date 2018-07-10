@@ -33,6 +33,10 @@ class DrawWidget(QtWidgets.QWidget):
 
         self.update()
 
+    def getPos(self, pos):
+        self.pos = pos
+        self.update()
+
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
         if self.draw:
@@ -65,7 +69,7 @@ class DrawWidget(QtWidgets.QWidget):
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.btaddr = "B8:AE:6E:1B:AD:A0"
+        self.btaddr = "18:2A:7B:F3:F8:F5"
         self.wiimote = None
         self._acc_vals = []
         self._bufferX = np.array([])
@@ -89,12 +93,13 @@ class Window(QtWidgets.QWidget):
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_all_sensors)
 
+        self.initUI()
+
         try:
             self.connect_wiimote()
         except Exception as e:
             print(e, ", no wiimote found")
 
-        self.initUI()
 
         # init status arrays for undo and redo
         self.current = []
@@ -201,7 +206,7 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(30)
+            self.set_update_rate(10)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
@@ -211,13 +216,32 @@ class Window(QtWidgets.QWidget):
         getCurrentTab = self.tab.currentIndex()
         #print("aktueller Tab", getCurrentTab)
 
+        if self.wiimote.buttons["B"]:
+            self.draw_widget.raise_()
+            if not self.draw:
+                self.pos = []
+
+            self.draw = True
+
+            x = self.cursor().pos().x()
+            y = self.cursor().pos().y()
+
+            self.pos.append((x, y))
+            self.draw_widget.getPos(self.pos)
+
+        else:
+            self.draw = False
+            self.raiseWidgets()
+            self.recognizeDrawing(self.pos)
+            self.pos = []
+
 
         # if the undo or the redo buttons were clicked while pressing the 'A'-Button on the wiimote, the action is
         if self.wiimote.buttons["A"]:
 
             self.buttonA = True
             xUndo = self.undoButton.pos().x()
-            yUndo = self.undoButton.pos().x()
+            yUndo = self.undoButton.pos().y()
             xRedo = self.redoButton.pos().x()
             yRedo = self.redoButton.pos().y()
 
@@ -362,7 +386,6 @@ class Window(QtWidgets.QWidget):
 
                 self.doneList.insertItem(newitempos, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
 
         self.update()
 
@@ -530,8 +553,9 @@ class Window(QtWidgets.QWidget):
 
     def recognizeDrawing(self, pos):
         self.pos = pos
-        recognized = self.recognizer.recognizeGesture(self.pos)
-        self.recognizedAction(recognized)
+        if len(self.pos) > 0:
+            recognized = self.recognizer.recognizeGesture(self.pos)
+            self.recognizedAction(recognized)
 
     def raiseWidgets(self):
         self.undoButton.raise_()
