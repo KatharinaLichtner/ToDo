@@ -34,8 +34,12 @@ class DrawWidget(QtWidgets.QWidget):
         self.update()
 
     def getPos(self, pos):
-        self.pos = pos
-        self.update()
+        if pos == -1:
+            self.pos = []
+            self.update()
+        else:
+            self.pos = pos
+            self.update()
 
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
@@ -69,7 +73,7 @@ class DrawWidget(QtWidgets.QWidget):
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.btaddr = "B8:AE:6E:1B:AD:A0"
+        self.btaddr = "18:2A:7B:F3:F8:F5"
         self.wiimote = None
         self._acc_vals = []
         self._bufferX = np.array([])
@@ -120,7 +124,7 @@ class Window(QtWidgets.QWidget):
 
     def initUI(self):
         # init window
-        self.setGeometry(0, 0, 1920, 950)
+        self.setGeometry(0, 0, 1920, 800)
         self.setStyleSheet("background-color: white")
 
         self.layout = QtWidgets.QVBoxLayout()
@@ -231,6 +235,7 @@ class Window(QtWidgets.QWidget):
         else:
             self.draw = False
             self.raiseWidgets()
+            self.draw_widget.getPos(-1)
             self.recognizeDrawing(self.pos)
             self.pos = []
 
@@ -422,6 +427,7 @@ class Window(QtWidgets.QWidget):
             self.undoRedoIndex += 1
         self.undoRedoTodoList()
         self.undoRedoDoneList()
+        self.status = ""
 
     # sets the to do list to a new state
     def undoRedoTodoList(self):
@@ -541,7 +547,7 @@ class Window(QtWidgets.QWidget):
 
     """def mousePressEvent(self, event):
         # when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
-        so that a new gesture can be drawn
+        # so that a new gesture can be drawn
         if event.button() == QtCore.Qt.RightButton:
             self.draw = True
             self.draw_widget.activateWindow()
@@ -674,4 +680,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
