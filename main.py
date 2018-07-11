@@ -3,37 +3,116 @@
 # -*- coding: utf-8 -*-
 
 import wiimote
-import sys
 from recognizer import Recognizer
 from transform import Transform
 from PyQt5 import QtWidgets, QtCore, QtGui
+from pylab import *
+from scipy import fft
+from sklearn import svm
+import numpy as np
+import sys
+import activity
 
+
+class DrawWidget(QtWidgets.QWidget):
+    def __init__(self, parent):
+        super(DrawWidget, self).__init__()
+
+        self.setMouseTracking(True)
+        self.qp = QtGui.QPainter()
+        self.pos = []
+        self.draw = False
+        self.parent = parent
+
+    def mousePressEvent(self, event):
+        """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
+        so that a new gesture can be drawn"""
+        if event.button() == QtCore.Qt.LeftButton:
+            self.draw = True
+            self.raise_()
+
+        self.update()
+
+    def getPos(self, pos):
+        if pos == -1:
+            self.pos = []
+            self.update()
+        else:
+            self.pos = pos
+            self.update()
+
+    def mouseMoveEvent(self, event):
+        """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
+        if self.draw:
+            point = (event.x(), event.y())
+            # print("P", point)
+            self.pos.append(point)
+            self.update()
+
+    def paintEvent(self, event):
+        """the cursor movement is drawn if bool for drawing is true"""
+        self.qp.begin(self)
+        self.qp.setPen(QtGui.QColor(255,105,180))
+        if len(self.pos) > 1:
+            for i in range(len(self.pos)-1):
+                self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
+        self.qp.end()
+
+    def mouseReleaseEvent(self, event):
+        """when mouse is released the bool draw is set false"""
+        if len(self.pos) == 0:
+            print("no gesture made")
+        else:
+            if event.button() == QtCore.Qt.LeftButton:
+                self.draw = False
+                self.parent.raiseWidgets()
+                self.parent.recognizeDrawing(self.pos)
+                self.pos = []
+                self.update()
 
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.btaddr = "B8:AE:6E:1B:AD:A0"
+        self.btaddr = "B8:AE:6E:50:05:32"
         self.wiimote = None
         self._acc_vals = []
+        self._bufferX = np.array([])
+        self._bufferY = np.array([])
+        self._bufferZ = np.array([])
+        self._avg = np.array([])
+        self.predicted = -1
+        self.buttonA = False
+        self.moveOneUp = False
+        self.moveOneDown = False
+        self.moveCompleteDown = False
+        self.moveCompleteUp = False
+
+        self.featureVector = activity.TrainingData.featureVector
+        self.trainingDataTest = activity.TrainingData.trainingDataTest
+
+        self.trainingData = []
+        self.trainingData.append(self.trainingDataTest)
+        self.c = svm.SVC()
+        self.fourier = []
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_all_sensors)
+
+        self.initUI()
 
         try:
             self.connect_wiimote()
         except Exception as e:
             print(e, ", no wiimote found")
 
-        self.initUI()
 
         # init status arrays for undo and redo
         self.current = []
-        self.undoRedo = [[],[]]
+        self.undoRedo = [[[],[]]]
         self.undoRedoTodo = []
         self.undoRedoDone = []
         self.undoRedoIndex = -1
         self.status = ""
         self.undoRedoLength = 5
-
 
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -45,12 +124,16 @@ class Window(QtWidgets.QWidget):
 
     def initUI(self):
         # init window
-        self.setGeometry(0, 0, 640, 720)
-        self.window().setStyleSheet("background-color: white")
+        self.setGeometry(0, 0, 1000, 800)
+        self.setStyleSheet("background-color: white")
 
         self.layout = QtWidgets.QVBoxLayout()
         layoutSettings = QtWidgets.QHBoxLayout()
         self.layoutList = QtWidgets.QHBoxLayout()
+
+        self.draw_widget = DrawWidget(self)
+        self.draw_widget.setParent(self)
+        self.draw_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
 
         # layoutSettings with undo and redo buttons
         self.undoButton = QtWidgets.QPushButton("Undo")
@@ -79,17 +162,19 @@ class Window(QtWidgets.QWidget):
 
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
-        #self.tabToDo.setStyleSheet("background-color: green")
-        self.toDoList.setStyleSheet("background-color: blue")
+        self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.toDoList.setStyleSheet("QListWidget::indicator:unchecked{image: url(unchecked.svg)}")
 
         # listWidget DoneList
         self.doneList = QtWidgets.QListWidget()
-        self.doneList.setStyleSheet("background-color: white")
+        self.doneList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.doneList.setStyleSheet("QListWidget::indicator:checked{image: url(checked.svg)}")
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
         tabDone.setLayout(layoutListDoneWidget)
+
+        self.toDoList.itemClicked.connect(self.checkItemOnList)
+        self.doneList.itemClicked.connect(self.checkItemOnList)
 
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
@@ -113,17 +198,9 @@ class Window(QtWidgets.QWidget):
         layoutPopup.addLayout(layoutButtons)
         self.inputToDo.setLayout(layoutPopup)
 
-        #self.drawGestures = QtWidgets.QWidget()
-        #self.drawGestures.setWindowFlag(QtCore.Qt.FramelessWindowHint)
-        #self.drawGestures.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        #self.drawGestures.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
-        #self.drawGestures.setStyleSheet("background-color: green")
-
-        #self.layout.addWidget(self.drawGestures)
-
-
         # adding layouts tab und Settings to window
         self.layout.addLayout(layoutSettings)
+
         self.layout.addLayout(self.layoutList)
         self.window().setLayout(self.layout)
         self.show()
@@ -134,24 +211,213 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(30)
+            self.set_update_rate(10)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
         x = self.cursor().pos().x()
         y = self.cursor().pos().y()
+        getCurrentTab = self.tab.currentIndex()
+
+        if self.wiimote.buttons["B"]:
+            self.draw_widget.raise_()
+            if not self.draw:
+                self.pos = []
+
+            self.draw = True
+
+            x = self.cursor().pos().x()
+            y = self.cursor().pos().y()
+
+            self.pos.append((x, y))
+            self.draw_widget.getPos(self.pos)
+
+        else:
+            self.draw = False
+            self.raiseWidgets()
+            self.draw_widget.getPos(-1)
+            self.recognizeDrawing(self.pos)
+            self.pos = []
+
 
         # if the undo or the redo buttons were clicked while pressing the 'A'-Button on the wiimote, the action is
         if self.wiimote.buttons["A"]:
-            xUndo = self.undoButton.pos().x()
-            yUndo = self.undoButton.pos().x()
-            xRedo = self.redoButton.pos().x()
-            yRedo = self.redoButton.pos().y()
-            if x > xUndo and x < xUndo + self.undoButton.width() and y > yUndo and y < yUndo + self.undoButton.height():
-                self.undo()
+            self.buttonA = True
 
-            elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
-                self.redo()
+        else:
+            if self.buttonA is True:
+                xUndo = self.undoButton.pos().x()
+                yUndo = self.undoButton.pos().y()
+                xRedo = self.redoButton.pos().x()
+                yRedo = self.redoButton.pos().y()
+                if x >= xUndo and x <= xUndo + self.undoButton.width() and y >= yUndo and y <= yUndo + self.undoButton.height():
+                    print("undo")
+                    self.undo()
+
+                elif x >= xRedo and x <= xRedo + self.redoButton.width() and y >= yRedo and y <= yRedo + self.redoButton.height():
+                    print("redo")
+                    self.redo()
+
+                else:
+                    self.deleteSelectedItem(getCurrentTab)
+
+
+        # if the 'Plus'-Button is released an the wiimote is not moving the current item will be moved up by one element
+        if self.wiimote.buttons['Plus'] and self.predicted == 2:
+            self.moveOneUp = True
+        else:
+            self.moveItemOneUp(getCurrentTab)
+
+
+         # if the 'Minus'-Button is released an the wiimote is not moving the current item will be moved down by one element
+        if self.wiimote.buttons['Minus'] and self.predicted == 2:
+            # print("eins nach unten")
+            self.moveOneDown = True
+        else:
+            self.moveItemOneDown(getCurrentTab)
+
+
+
+        # if the 'Plus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the bottom of the list
+        if self.wiimote.buttons['Plus'] and self.predicted == 1:
+            # print("ganz nach oben")
+            self.moveCompleteUp = True
+        else:
+
+            self.moveItemToTop(getCurrentTab)
+
+
+        # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
+        if self.wiimote.buttons['Minus'] and self.predicted == 1:
+            # print("ganz nach unten")
+            self.moveCompleteDown = True
+        else:
+            self.moveItemToBottom(getCurrentTab)
+
+
+        self.update()
+
+    def deleteSelectedItem(self, getCurrentTab):
+        # ToDoTab: check if 'A'-Button is released and if it was pressed before
+        # if predicted activity equals shaking from the left to the right side the current item will be deleted
+        # if the toDoList contains items the first item will be the current item
+        if self.predicted == 0 and self.buttonA is True and getCurrentTab == 0:
+            self.buttonA = False
+            item = self.toDoList.currentRow()
+            if item is not -1:
+                del self.undoRedoTodo[item]
+                self.undoRedoUpdateLists()
+                self.toDoList.takeItem(item)
+                itemToSelect = self.toDoList.item(0)
+                if itemToSelect is not None:
+                    self.toDoList.setCurrentItem(itemToSelect)
+
+        # DoneTab: check if 'A'-Button is released and if it was pressed before
+        # if predicted activity equals shaking from the left to the right side the current item will be deleted
+        # if the toDoList contains items the first item will be the current item
+        if self.predicted == 0 and self.buttonA is True and getCurrentTab == 1:
+            self.buttonA = False
+            item = self.doneList.currentRow()
+            del self.undoRedoDone[item]
+            self.undoRedoUpdateLists()
+            self.doneList.takeItem(item)
+            itemToSelect = self.doneList.item(0)
+            if itemToSelect is not None:
+                self.doneList.setCurrentItem(itemToSelect)
+
+    def moveItemOneUp(self, getCurrentTab):
+        itemTodo = self.toDoList.currentRow()
+        itemDone = self.doneList.currentRow()
+
+        if itemTodo is not None and itemTodo >= 0 and self.moveOneUp is True and getCurrentTab == 0:
+            self.moveOneUp = False
+            currentItem = self.toDoList.takeItem(itemTodo)
+            print("currentItem", currentItem.text())
+            del self.undoRedoTodo[itemTodo]
+            self.undoRedoTodo.insert(itemTodo - 1, currentItem.text())
+            self.undoRedoUpdateLists()
+            self.toDoList.insertItem(itemTodo - 1, currentItem)
+            self.toDoList.setCurrentItem(currentItem)
+        elif itemDone is not None and itemDone >= 0 and self.moveOneUp is True and getCurrentTab == 1:
+            self.moveOneUp = False
+            currentItem = self.doneList.takeItem(itemDone)
+            del self.undoRedoDone[itemDone]
+            self.undoRedoDone.insert(itemDone - 1, currentItem.text())
+            self.undoRedoUpdateLists()
+            self.doneList.insertItem(itemDone - 1, currentItem)
+            self.doneList.setCurrentItem(currentItem)
+
+    def moveItemOneDown(self, getCurrentTab):
+            itemToDo = self.toDoList.currentRow()
+            itemDone = self.doneList.currentRow()
+
+            if itemToDo is not None and itemToDo >= 0 and self.moveOneDown is True and getCurrentTab == 0:
+                self.moveOneDown = False
+                currentItem = self.toDoList.takeItem(itemToDo)
+                del self.undoRedoTodo[itemToDo]
+                self.undoRedoTodo.insert(itemToDo + 1, currentItem.text())
+                self.undoRedoUpdateLists()
+                self.toDoList.insertItem(itemToDo + 1, currentItem)
+                self.toDoList.setCurrentItem(currentItem)
+            elif itemDone is not None and itemDone >= 0 and self.moveOneDown is True and getCurrentTab == 1:
+                self.moveOneDown = False
+                currentItem = self.doneList.takeItem(itemDone)
+                del self.undoRedoDone[itemDone]
+                self.undoRedoDone.insert(itemDone + 1, currentItem.text())
+                self.undoRedoUpdateLists()
+                self.doneList.insertItem(itemDone + 1, currentItem)
+                self.doneList.setCurrentItem(currentItem)
+
+
+    def moveItemToTop(self, getCurrentTab):
+        itemToDo = self.toDoList.currentRow()
+        itemDone = self.doneList.currentRow()
+
+        if itemToDo is not None and itemToDo >= 0 and self.moveCompleteUp is True and getCurrentTab == 0:
+            self.moveCompleteUp = False
+            #newitempos = len(self.toDoList)
+            currentRow = self.toDoList.currentRow()
+            currentItem = self.toDoList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
+
+            self.toDoList.insertItem(0, currentItem)
+            self.toDoList.setCurrentItem(currentItem)
+
+        elif itemDone is not None and itemDone >= 0 and self.moveCompleteUp is True and getCurrentTab == 1:
+            self.moveCompleteUp = False
+            #newitempos = len(self.toDoList)
+            currentRow = self.doneList.currentRow()
+            currentItem = self.doneList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
+
+            self.doneList.insertItem(0, currentItem)
+            self.doneList.setCurrentItem(currentItem)
+
+
+    def moveItemToBottom(self, getCurrentTab):
+
+            itemToDo = self.toDoList.currentRow()
+            itemDone = self.doneList.currentRow()
+
+            if itemToDo is not None and itemToDo >= 0 and self.moveCompleteDown is True and getCurrentTab == 0:
+                self.moveCompleteDown = False
+                newitempos = len(self.toDoList)
+                currentRow = self.toDoList.currentRow()
+                currentItem = self.toDoList.takeItem(currentRow)
+
+                self.toDoList.insertItem(newitempos, currentItem)
+                self.toDoList.setCurrentItem(currentItem)
+
+            elif itemDone is not None and itemDone >= 0 and self.moveCompleteDown is True and getCurrentTab == 1:
+                self.moveCompleteDown = False
+                newitempos = len(self.doneList)
+                currentRow = self.doneList.currentRow()
+                currentItem = self.doneList.takeItem(currentRow)
+
+                self.doneList.insertItem(newitempos, currentItem)
+                self.doneList.setCurrentItem(currentItem)
 
     # sets the status of the window to one status backwards
     def undo(self):
@@ -159,6 +425,7 @@ class Window(QtWidgets.QWidget):
         self.undoRedoTodoList()
         self.undoRedoDoneList()
         self.status = "undo"
+        print("undo undoredo", self.undoRedo)
 
     # sets the status of the window to one status forward
     def redo(self):
@@ -166,6 +433,8 @@ class Window(QtWidgets.QWidget):
             self.undoRedoIndex += 1
         self.undoRedoTodoList()
         self.undoRedoDoneList()
+        self.status = ""
+        print("redo undoredo", self.undoRedo)
 
     # sets the to do list to a new state
     def undoRedoTodoList(self):
@@ -177,6 +446,7 @@ class Window(QtWidgets.QWidget):
                 item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
                 item.setCheckState(0)
                 self.toDoList.addItem(item)
+                self.toDoList.setCurrentItem(item)
         self.toDoList.show()
 
     # sets the done list to a new state
@@ -189,7 +459,8 @@ class Window(QtWidgets.QWidget):
                 item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
                 item.setCheckState(2)
                 self.doneList.addItem(item)
-                self.doneList.show()
+                self.doneList.setCurrentItem(item)
+        self.doneList.show()
 
     # if a action like add, remove, check, uncheck was made, the tod o and undo lists are updated
     def undoRedoUpdateLists(self):
@@ -218,13 +489,48 @@ class Window(QtWidgets.QWidget):
             return
         self._acc_vals = self.wiimote.accelerometer
         x, y, z = self._acc_vals
-        print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
-        # todo: other sensors...
-        self.update()
+        #print("accelerometer", self._acc_vals, "x", x, "y", y, "z", z)
+
+        fftData = self.fft(x, y, z)
+        self.fourier.append(fftData)
+        if len(self.fourier) >= 32:
+            self.svm(fftData)
+            self.update()
+
+    # fft reads in the accelerometer data of x-,y- and z-axis.
+    # calculate the peaks of the raw data from every movement with the furier transformations
+    def fft(self, x, y, z):
+        size = 32
+        self._bufferX = np.append(self._bufferX, x)
+        self._bufferX = self._bufferX[-size:]
+        self._bufferY = np.append(self._bufferY, y)
+        self._bufferY = self._bufferY[-size:]
+        self._bufferZ = np.append(self._bufferZ, z)
+        self._bufferZ = self._bufferZ[-size:]
+
+        for i in range(len(self._bufferX)):
+            xValue = self._bufferX[i]
+            yValue = self._bufferY[i]
+            zValue = self._bufferZ[i]
+            avgValue = ((xValue + yValue + zValue) / 3)
+            self._avg = np.append(self._avg, avgValue)
+            self._avg = self._avg[-size:]
+
+        avg = np.fft.fft(self._avg / len(self._avg))
+        avgfft = abs(avg)
+        return avgfft
+
+
+    # with the trained data it is possible to predict the current input movement of the wiimote
+    def svm(self, data):
+        self.c.fit(self.trainingDataTest, self.featureVector)
+        predicted = self.c.predict([data[1:]])
+        self.predicted = predicted[0]
+        #print("Predicted", self.predicted)
+
 
     def update_accel(self, acc_vals):
         self._acc_vals = acc_vals
-        self.update()
 
     def process_wiimote_ir_data(self,event):
         if len(event) == 4:
@@ -232,32 +538,40 @@ class Window(QtWidgets.QWidget):
 
             for led in event:
                 leds.append((led["x"], led["y"]))
-            P, DEST_W, DEST_H = (1024 /2, 768/2), 1280, 676
 
+            if leds[0][0] == leds[0][1] == leds[1][0] == leds[1][1] == leds[2][0] \
+                    == leds[2][1] == leds[3][0] == leds[3][1]:
+                return -1, -1
+
+            P, DEST_W, DEST_H = (1024 / 2, 768 / 2), 1920, 950
             try:
                 x, y = self.transform.transform(P, leds, DEST_W, DEST_H)
             except Exception as e:
                 print(e)
                 x = y = -1
 
-            self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x,y)))
+            self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
-    def mousePressEvent(self, event):
-        """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
-        so that a new gesture can be drawn"""
-        if event.button() == QtCore.Qt.LeftButton:
+    """def mousePressEvent(self, event):
+        # when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
+        # so that a new gesture can be drawn
+        if event.button() == QtCore.Qt.RightButton:
             self.draw = True
-            self.update()
+            self.draw_widget.activateWindow()
+            self.draw_widget.raise_()
+
+        self.update()
+
 
     def mouseMoveEvent(self, event):
-        """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
+        # while bool for drawing is true the position of the mouse cursor during moving are added to points
         if self.draw:
             point = (event.x(), event.y())
             self.pos.append(point)
-            self.update()
+            #self.update()
 
     def paintEvent(self, event):
-        """the cursor movement is drawn if bool for drawing is true"""
+        # the cursor movement is drawn if bool for drawing is true
         self.qp.begin(self)
         self.qp.setPen(QtGui.QColor(255,105,180))
         if len(self.pos) > 1:
@@ -266,16 +580,34 @@ class Window(QtWidgets.QWidget):
         self.qp.end()
 
     def mouseReleaseEvent(self, event):
-        """when mouse is released the bool draw is set false"""
+        # when mouse is released the bool draw is set false
         if len(self.pos) == 0:
             print("no gesture made")
         else:
-            if event.button() == QtCore.Qt.LeftButton:
+            if event.button() == QtCore.Qt.RightButton:
                 self.draw = False
+                self.undoButton.raise_()
+                self.redoButton.raise_()
+                self.tab.raise_()
+                self.tabToDo.raise_()
+                self.toDoList.raise_()
                 recognized = self.recognizer.recognizeGesture(self.pos)
                 self.recognizedAction(recognized)
                 self.pos = []
-                self.update()
+                self.update()"""
+
+    def recognizeDrawing(self, pos):
+        self.pos = pos
+        if len(self.pos) > 0:
+            recognized = self.recognizer.recognizeGesture(self.pos)
+            self.recognizedAction(recognized)
+
+    def raiseWidgets(self):
+        self.undoButton.raise_()
+        self.redoButton.raise_()
+        self.tab.raise_()
+        self.tabToDo.raise_()
+        self.toDoList.raise_()
 
     # takeItem from source: https://stackoverflow.com/questions/23835847/how-to-remove-item-from-qlistwidget/23836142
     def recognizedAction(self, recognized):
@@ -283,29 +615,54 @@ class Window(QtWidgets.QWidget):
             self.editToDo.setFocus()
             self.inputToDo.show()
         elif recognized == "Check":
-            item = self.toDoList.currentItem()
-            self.undoRedoDone.append(item.text())
-            del self.undoRedoTodo[self.toDoList.row(item)]
-            self.undoRedoUpdateLists()
+            if self.toDoList.currentItem() is not None:
+                item = self.toDoList.currentItem()
+                self.undoRedoDone.append(item.text())
+                del self.undoRedoTodo[self.toDoList.row(item)]
+                self.undoRedoUpdateLists()
+                self.toDoList.takeItem(self.toDoList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(2)
+                self.doneList.insertItem(0, newItem)
+                self.doneList.setCurrentItem(newItem)
+        elif recognized == "Uncheck":
+            if self.doneList.currentItem() is not None:
+                item = self.doneList.currentItem()
+                self.undoRedoTodo.append(item.text())
+                del self.undoRedoDone[self.toDoList.row(item)]
+                self.undoRedoUpdateLists()
+                self.doneList.takeItem(self.doneList.row(item))
+                newItem = QtWidgets.QListWidgetItem(item.text())
+                newItem.setCheckState(0)
+                newItem.checkState()
+                self.toDoList.insertItem(0, newItem)
+                self.toDoList.setCurrentItem(newItem)
+
+    def checkItemOnList(self, item):
+        if item.checkState() == 2:
             self.toDoList.takeItem(self.toDoList.row(item))
             newItem = QtWidgets.QListWidgetItem(item.text())
             newItem.setCheckState(2)
             self.doneList.insertItem(0, newItem)
             self.doneList.setCurrentItem(newItem)
-        elif recognized == "Uncheck":
-            if self.doneList.currentItem() is not None:
-                item = self.doneList.currentItem()
-                self.doneList.takeItem(self.doneList.row(item))
-                newItem = QtWidgets.QListWidgetItem(item.text())
-                newItem.setCheckState(0)
-                self.toDoList.insertItem(0, newItem)
-                self.toDoList.setCurrentItem(newItem)
+        elif item.checkState() == 0:
+            self.doneList.takeItem(self.doneList.row(item))
+            newItem = QtWidgets.QListWidgetItem(item.text())
+            newItem.setCheckState(0)
+            #newItem.checkState()
+            self.toDoList.insertItem(0, newItem)
+            self.toDoList.setCurrentItem(newItem)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
             self.newEntry = self.editToDo.text()
             self.undoRedoTodo.insert(0, self.newEntry)
             self.undoRedoUpdateLists()
+            if self.status == "undo":
+                self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
+                self.undoRedoIndex = -1
+                self.status = ""
+            self.undoRedo.append(self.current[:])
             self.editToDo.setText("")
             self.inputToDo.hide()
             item = QtWidgets.QListWidgetItem(self.newEntry)
