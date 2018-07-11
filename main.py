@@ -103,11 +103,12 @@ class Window(QtWidgets.QWidget):
 
         # init status arrays for undo and redo
         self.current = []
-        self.undoRedo = []
+        self.undoRedo = [[],[]]
         self.undoRedoTodo = []
         self.undoRedoDone = []
         self.undoRedoIndex = -1
         self.status = ""
+        self.undoRedoLength = 5
 
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -426,30 +427,41 @@ class Window(QtWidgets.QWidget):
     def undoRedoTodoList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
-        else:
-            self.undoRedoTodo = []
         self.toDoList.clear()
         for i in range(len(self.undoRedoTodo)):
             if len(self.undoRedoTodo) is not 0:
                 item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
                 item.setCheckState(0)
-                self.toDoList.insertItem(0, item)
+                self.toDoList.addItem(item)
                 self.toDoList.setCurrentItem(item)
         self.toDoList.show()
 
+    # sets the done list to a new state
     def undoRedoDoneList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoDone = self.undoRedo[self.undoRedoIndex][1][:]
-        else:
-            self.undoRedoDone = []
         self.doneList.clear()
         for i in range(len(self.undoRedoDone)):
             if len(self.undoRedoDone) is not 0:
                 item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
-                item.setCheckState(0)
-                self.doneList.insertItem(0, item)
+                item.setCheckState(2)
+                self.doneList.addItem(item)
                 self.doneList.setCurrentItem(item)
-                self.doneList.show()
+        self.doneList.show()
+
+    # if a action like add, remove, check, uncheck was made, the tod o and undo lists are updated
+    def undoRedoUpdateLists(self):
+        self.current = []
+        self.current.append(self.undoRedoTodo[:])
+        self.current.append(self.undoRedoDone[:])
+        if self.status == "undo":
+            self.undoRedo = self.undoRedo[:(self.undoRedoIndex + 1)][:]
+            self.undoRedoIndex = -1
+            self.status = ""
+        self.undoRedo.append(self.current[:])
+        if len(self.undoRedo) > self.undoRedoLength:
+            length = len(self.undoRedo) - self.undoRedoLength
+            self.undoRedo = self.undoRedo[length:][:]
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
