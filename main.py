@@ -33,6 +33,10 @@ class DrawWidget(QtWidgets.QWidget):
 
         self.update()
 
+    def getPos(self, pos):
+        self.pos = pos
+        self.update()
+
     def mouseMoveEvent(self, event):
         """while bool for drawing is true the position of the mouse cursor during moving are added to points"""
         if self.draw:
@@ -58,6 +62,8 @@ class DrawWidget(QtWidgets.QWidget):
             if event.button() == QtCore.Qt.LeftButton:
                 self.draw = False
                 self.parent.raiseWidgets()
+                self.parent.recognizeDrawing(self.pos)
+                self.pos = []
                 self.update()
 
 class Window(QtWidgets.QWidget):
@@ -87,12 +93,13 @@ class Window(QtWidgets.QWidget):
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_all_sensors)
 
+        self.initUI()
+
         try:
             self.connect_wiimote()
         except Exception as e:
             print(e, ", no wiimote found")
 
-        self.initUI()
 
         # init status arrays for undo and redo
         self.current = []
@@ -199,15 +206,32 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(30)
+            self.set_update_rate(10)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
-        #self.predicted = -1
         x = self.cursor().pos().x()
         y = self.cursor().pos().y()
         getCurrentTab = self.tab.currentIndex()
-        #print("aktueller Tab", getCurrentTab)
+
+        if self.wiimote.buttons["B"]:
+            self.draw_widget.raise_()
+            if not self.draw:
+                self.pos = []
+
+            self.draw = True
+
+            x = self.cursor().pos().x()
+            y = self.cursor().pos().y()
+
+            self.pos.append((x, y))
+            self.draw_widget.getPos(self.pos)
+
+        else:
+            self.draw = False
+            self.raiseWidgets()
+            self.recognizeDrawing(self.pos)
+            self.pos = []
 
 
         # if the undo or the redo buttons were clicked while pressing the 'A'-Button on the wiimote, the action is
@@ -215,7 +239,7 @@ class Window(QtWidgets.QWidget):
 
             self.buttonA = True
             xUndo = self.undoButton.pos().x()
-            yUndo = self.undoButton.pos().x()
+            yUndo = self.undoButton.pos().y()
             xRedo = self.redoButton.pos().x()
             yRedo = self.redoButton.pos().y()
 
@@ -225,65 +249,96 @@ class Window(QtWidgets.QWidget):
             elif x > xRedo and x < xRedo + self.redoButton.width() and y > yRedo and y < yRedo + self.redoButton.height():
                 self.redo()
         else:
-            # ToDoTab: check if 'A'-Button is released and if it was pressed before
-            # if predicted activity equals shaking from the left to the right side the current item will be deleted
-            # if the toDoList contains items the first item will be the current item
-            if self.predicted == 0 and self.buttonA is True and getCurrentTab == 0:
-                self.buttonA = False
-                item = self.toDoList.currentRow()
 
-                self.toDoList.takeItem(item)
-                itemToSelect = self.toDoList.item(0)
-                if itemToSelect is not None:
-                    self.toDoList.setCurrentItem(itemToSelect)
+            self.deleteSelectedItem(getCurrentTab)
 
-            # DoneTab: check if 'A'-Button is released and if it was pressed before
-            # if predicted activity equals shaking from the left to the right side the current item will be deleted
-            # if the toDoList contains items the first item will be the current item
-            if self.predicted == 0 and self.buttonA is True and getCurrentTab == 1:
-                self.buttonA = False
-                item = self.doneList.currentRow()
-
-                self.doneList.takeItem(item)
-                itemToSelect = self.doneList.item(0)
-                if itemToSelect is not None:
-                    self.doneList.setCurrentItem(itemToSelect)
 
         # if the 'Plus'-Button is released an the wiimote is not moving the current item will be moved up by one element
         if self.wiimote.buttons['Plus'] and self.predicted == 2:
             self.moveOneUp = True
         else:
+            self.moveItemOneUp(getCurrentTab)
 
-            itemTodo = self.toDoList.currentRow()
-            itemDone = self.doneList.currentRow()
-
-            if itemTodo is not None and itemTodo >= 0 and self.moveOneUp is True and getCurrentTab == 0:
-                self.moveOneUp = False
-                newitempos = itemTodo -1
-                currentRow = self.toDoList.currentRow()
-                currentItem = self.toDoList.takeItem(currentRow)
-               # print("Um eins hoch verschieben")
-                #for i in range(len(self.toDoList)):
-
-                self.toDoList.insertItem(currentRow - 1, currentItem)
-                self.toDoList.setCurrentItem(currentItem)
-            elif itemDone is not None and itemDone >= 0 and self.moveOneUp is True and getCurrentTab == 1:
-                self.moveOneUp = False
-                newitempos = itemDone -1
-                currentRow = self.doneList.currentRow()
-                currentItem = self.doneList.takeItem(currentRow)
-               # print("Um eins hoch verschieben")
-                #for i in range(len(self.toDoList)):
-
-                self.doneList.insertItem(currentRow - 1, currentItem)
-                self.doneList.setCurrentItem(currentItem)
 
          # if the 'Minus'-Button is released an the wiimote is not moving the current item will be moved down by one element
         if self.wiimote.buttons['Minus'] and self.predicted == 2:
-            print("ein nach unten")
+            print("eins nach unten")
             self.moveOneDown = True
         else:
+            self.moveItemOneDown(getCurrentTab)
 
+
+
+        # if the 'Plus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the bottom of the list
+        if self.wiimote.buttons['Plus'] and self.predicted == 1:
+            print("ganz nach oben")
+            self.moveCompleteUp = True
+        else:
+
+            self.moveItemToTop(getCurrentTab)
+
+
+        # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
+        if self.wiimote.buttons['Minus'] and self.predicted == 1:
+            print("ganz nach unten")
+            self.moveCompleteDown = True
+        else:
+            self.moveItemToBottom(getCurrentTab)
+
+
+        self.update()
+
+    def deleteSelectedItem(self, getCurrentTab):
+        # ToDoTab: check if 'A'-Button is released and if it was pressed before
+        # if predicted activity equals shaking from the left to the right side the current item will be deleted
+        # if the toDoList contains items the first item will be the current item
+        if self.predicted == 0 and self.buttonA is True and getCurrentTab == 0:
+            self.buttonA = False
+            item = self.toDoList.currentRow()
+
+            self.toDoList.takeItem(item)
+            itemToSelect = self.toDoList.item(0)
+            if itemToSelect is not None:
+                self.toDoList.setCurrentItem(itemToSelect)
+
+        # DoneTab: check if 'A'-Button is released and if it was pressed before
+        # if predicted activity equals shaking from the left to the right side the current item will be deleted
+        # if the toDoList contains items the first item will be the current item
+        if self.predicted == 0 and self.buttonA is True and getCurrentTab == 1:
+            self.buttonA = False
+            item = self.doneList.currentRow()
+
+            self.doneList.takeItem(item)
+            itemToSelect = self.doneList.item(0)
+            if itemToSelect is not None:
+                self.doneList.setCurrentItem(itemToSelect)
+
+    def moveItemOneUp(self, getCurrentTab):
+        itemTodo = self.toDoList.currentRow()
+        itemDone = self.doneList.currentRow()
+
+        if itemTodo is not None and itemTodo >= 0 and self.moveOneUp is True and getCurrentTab == 0:
+            self.moveOneUp = False
+            newitempos = itemTodo -1
+            currentRow = self.toDoList.currentRow()
+            currentItem = self.toDoList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
+
+            self.toDoList.insertItem(currentRow - 1, currentItem)
+            self.toDoList.setCurrentItem(currentItem)
+        elif itemDone is not None and itemDone >= 0 and self.moveOneUp is True and getCurrentTab == 1:
+            self.moveOneUp = False
+            newitempos = itemDone -1
+            currentRow = self.doneList.currentRow()
+            currentItem = self.doneList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
+
+            self.doneList.insertItem(currentRow - 1, currentItem)
+            self.doneList.setCurrentItem(currentItem)
+
+    def moveItemOneDown(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
 
@@ -303,42 +358,34 @@ class Window(QtWidgets.QWidget):
                 self.doneList.setCurrentItem(currentItem)
 
 
-        # if the 'Plus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the bottom of the list
-        if self.wiimote.buttons['Plus'] and self.predicted == 1:
-            print("ganz nach oben")
-            self.moveCompleteUp = True
-        else:
+    def moveItemToTop(self, getCurrentTab):
+        itemToDo = self.toDoList.currentRow()
+        itemDone = self.doneList.currentRow()
 
-            itemToDo = self.toDoList.currentRow()
-            itemDone = self.doneList.currentRow()
+        if itemToDo is not None and itemToDo >= 0 and self.moveCompleteUp is True and getCurrentTab == 0:
+            self.moveCompleteUp = False
+            #newitempos = len(self.toDoList)
+            currentRow = self.toDoList.currentRow()
+            currentItem = self.toDoList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
 
-            if itemToDo is not None and itemToDo >= 0 and self.moveCompleteUp is True and getCurrentTab == 0:
-                self.moveCompleteUp = False
-                #newitempos = len(self.toDoList)
-                currentRow = self.toDoList.currentRow()
-                currentItem = self.toDoList.takeItem(currentRow)
-               # print("Um eins hoch verschieben")
-                #for i in range(len(self.toDoList)):
+            self.toDoList.insertItem(0, currentItem)
+            self.toDoList.setCurrentItem(currentItem)
 
-                self.toDoList.insertItem(0, currentItem)
-                self.toDoList.setCurrentItem(currentItem)
+        elif itemDone is not None and itemDone >= 0 and self.moveCompleteUp is True and getCurrentTab == 1:
+            self.moveCompleteUp = False
+            #newitempos = len(self.toDoList)
+            currentRow = self.doneList.currentRow()
+            currentItem = self.doneList.takeItem(currentRow)
+           # print("Um eins hoch verschieben")
+            #for i in range(len(self.toDoList)):
 
-            elif itemDone is not None and itemDone >= 0 and self.moveCompleteUp is True and getCurrentTab == 1:
-                self.moveCompleteUp = False
-                #newitempos = len(self.toDoList)
-                currentRow = self.doneList.currentRow()
-                currentItem = self.doneList.takeItem(currentRow)
-               # print("Um eins hoch verschieben")
-                #for i in range(len(self.toDoList)):
+            self.doneList.insertItem(0, currentItem)
+            self.doneList.setCurrentItem(currentItem)
 
-                self.doneList.insertItem(0, currentItem)
-                self.doneList.setCurrentItem(currentItem)
 
-        # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
-        if self.wiimote.buttons['Minus'] and self.predicted == 1:
-            print("ganz nach unten")
-            self.moveCompleteDown = True
-        else:
+    def moveItemToBottom(self, getCurrentTab):
 
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -360,9 +407,6 @@ class Window(QtWidgets.QWidget):
 
                 self.doneList.insertItem(newitempos, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
-
-        self.update()
 
     # sets the status of the window to one status backwards
     def undo(self):
@@ -526,6 +570,12 @@ class Window(QtWidgets.QWidget):
                 self.pos = []
                 self.update()
 
+    def recognizeDrawing(self, pos):
+        self.pos = pos
+        if len(self.pos) > 0:
+            recognized = self.recognizer.recognizeGesture(self.pos)
+            self.recognizedAction(recognized)
+
     def raiseWidgets(self):
         self.undoButton.raise_()
         self.redoButton.raise_()
@@ -605,3 +655,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
