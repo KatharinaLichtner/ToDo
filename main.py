@@ -569,8 +569,9 @@ class Window(QtWidgets.QWidget):
     def eventFilter(self, widget, event):
         if (event.type() == QtCore.QEvent.KeyPress and widget is self.inputToDo):
             if event.key() == QtCore.Qt.Key_Return:
-                self.addNewEntry()
-                return True
+                if self.editToDo.text() is not "":
+                    self.addNewEntry()
+                    return True
         return QtWidgets.QWidget.eventFilter(self, widget, event)
 
 
@@ -701,7 +702,8 @@ class Window(QtWidgets.QWidget):
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
-             self.addNewEntry()
+            if self.editToDo.text() is not "":
+                self.addNewEntry()
         elif self.sender().text() == self.cancelButton.text():
              self.inputToDo.hide()
 
