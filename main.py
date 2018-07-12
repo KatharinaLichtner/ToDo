@@ -76,7 +76,7 @@ class DrawWidget(QtWidgets.QWidget):
 class Window(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.btaddr = "B8:AE:6E:50:05:32"
+        self.btaddr = "18:2A:7B:F3:F8:F5"
         self.wiimote = None
         self._acc_vals = []
         self._bufferX = np.array([])
@@ -125,7 +125,7 @@ class Window(QtWidgets.QWidget):
 
     def initUI(self):
         # init window
-        self.setGeometry(0, 0, 1000, 800)
+        self.setGeometry(0, 0, 1280, 800)
         self.setStyleSheet("background-color: white")
 
         self.layout = QtWidgets.QVBoxLayout()
@@ -159,6 +159,8 @@ class Window(QtWidgets.QWidget):
         # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
+        self.toDoList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
 
         layoutListToDoWidget.addWidget(self.toDoList)
@@ -297,15 +299,19 @@ class Window(QtWidgets.QWidget):
         # if the toDoList contains items the first item will be the current item
         if self.predicted == 0 and self.buttonA is True and getCurrentTab == 0:
             self.buttonA = False
-            item = self.toDoList.currentRow()
+            try:
+                item = self.toDoList.currentRow()
 
-            if item is not -1:
-                del self.undoRedoTodo[item]
-                self.undoRedoUpdateLists()
-                self.toDoList.takeItem(item)
-                itemToSelect = self.toDoList.item(0)
-                if itemToSelect is not None:
-                    self.toDoList.setCurrentItem(itemToSelect)
+                if item is not -1:
+                    del self.undoRedoTodo[item]
+                    self.undoRedoUpdateLists()
+                    self.toDoList.takeItem(item)
+                    #if len(self.toDoList) > 0:
+                        #itemToSelect = self.toDoList.item(0)
+                        #if itemToSelect is not None:
+                    #self.toDoList.setCurrentItem(self.toDoList.item(0))
+            except Exception as e:
+                print("E", e)
 
 
         # DoneTab: check if 'A'-Button is released and if it was pressed before
@@ -543,8 +549,7 @@ class Window(QtWidgets.QWidget):
                     == leds[2][1] == leds[3][0] == leds[3][1]:
                 return -1, -1
 
-
-            P, DEST_W, DEST_H = (1024 / 2, 768 / 2), 1920, 950
+            P, DEST_W, DEST_H = (1024 / 2, 768 / 2), 1280, 800
 
             try:
                 x, y = self.transform.transform(P, leds, DEST_W, DEST_H)
@@ -630,7 +635,7 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.toDoList.takeItem(self.toDoList.row(item))
                 newItem = QtWidgets.QListWidgetItem(item.text())
-                newItem.setCheckState(2)
+                newItem.setCheckState(QtCore.Qt.Checked)
                 self.doneList.insertItem(0, newItem)
                 self.doneList.setCurrentItem(newItem)
         elif recognized == "Uncheck":
@@ -641,18 +646,16 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.takeItem(self.doneList.row(item))
                 newItem = QtWidgets.QListWidgetItem(item.text())
-                newItem.setCheckState(0)
-                newItem.checkState()
+                newItem.setCheckState(QtCore.Qt.Unchecked)
                 self.toDoList.insertItem(0, newItem)
                 self.toDoList.setCurrentItem(newItem)
 
-
     def checkItemOnToDoList(self, item):
 
-        if item.checkState() == 2:
+        if item.checkState() == QtCore.Qt.Checked:
             self.toDoList.takeItem(self.toDoList.row(item))
             newItem = QtWidgets.QListWidgetItem(item.text())
-            newItem.setCheckState(2)
+            newItem.setCheckState(QtCore.Qt.Checked)
             self.doneList.insertItem(0, newItem)
             self.doneList.setCurrentItem(newItem)
 
@@ -660,15 +663,14 @@ class Window(QtWidgets.QWidget):
             pass
 
     def checkItemOnDoneList(self, item):
-        if item.checkState() == 0:
+        if item.checkState() == QtCore.Qt.Unchecked:
             self.doneList.takeItem(self.doneList.row(item))
             newItem = QtWidgets.QListWidgetItem(item.text())
-            newItem.setCheckState(0)
+            newItem.setCheckState(QtCore.Qt.Unchecked)
             self.toDoList.insertItem(0, newItem)
             self.toDoList.setCurrentItem(newItem)
         else:
             pass
-
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
@@ -692,6 +694,7 @@ class Window(QtWidgets.QWidget):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
     font_db = QtGui.QFontDatabase()
     font_id = font_db.addApplicationFont("Handlee-Regular.ttf")
     handleeFont = QtGui.QFont("Handlee")
