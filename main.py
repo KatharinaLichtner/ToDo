@@ -54,7 +54,7 @@ class DrawWidget(QtWidgets.QWidget):
         """the cursor movement is drawn if bool for drawing is true"""
         if self.draw:
             self.qp.begin(self)
-            self.qp.setPen(QtGui.QColor(255,105,180))
+            self.qp.setPen(QtGui.QColor(255, 105, 180))
             if len(self.pos) > 1:
                 for i in range(len(self.pos)-1):
                     self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
@@ -89,6 +89,8 @@ class Window(QtWidgets.QWidget):
         self.moveOneDown = False
         self.moveCompleteDown = False
         self.moveCompleteUp = False
+        self.btn_One = False
+        self.btn_Two = False
 
         self.featureVector = activity.TrainingData.featureVector
         self.trainingDataTest = activity.TrainingData.trainingDataTest
@@ -150,9 +152,9 @@ class Window(QtWidgets.QWidget):
         # init tabs
         self.tab = QtWidgets.QTabWidget()
         self.tabToDo = QtWidgets.QWidget()
-        tabDone = QtWidgets.QWidget()
+        self.tabDone = QtWidgets.QWidget()
         self.tab.addTab(self.tabToDo, "To Do")
-        self.tab.addTab(tabDone, "Done")
+        self.tab.addTab(self.tabDone, "Done")
         self.layoutList.addWidget(self.tab)
 
         # listWidget ToDoList
@@ -160,6 +162,8 @@ class Window(QtWidgets.QWidget):
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
         self.toDoList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        #self.toDoList.setStyleSheet("QListView::item:selected{selection-background-color: pink}")
+        #self.toDoList.setStyleSheet("QListView::item {color: black}")
 
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
 
@@ -174,7 +178,7 @@ class Window(QtWidgets.QWidget):
         self.doneList.setStyleSheet("QListWidget::indicator:checked{image: url(checked.svg)}")
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
-        tabDone.setLayout(layoutListDoneWidget)
+        self.tabDone.setLayout(layoutListDoneWidget)
 
 
         self.toDoList.itemClicked.connect(self.checkItemOnToDoList)
@@ -283,7 +287,6 @@ class Window(QtWidgets.QWidget):
             # print("ganz nach oben")
             self.moveCompleteUp = True
         else:
-
             self.moveItemToTop(getCurrentTab)
 
         # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
@@ -292,6 +295,20 @@ class Window(QtWidgets.QWidget):
             self.moveCompleteDown = True
         else:
             self.moveItemToBottom(getCurrentTab)
+
+        if self.wiimote.buttons['One']:
+            self.btn_One = True
+        else:
+            if self.tab.currentIndex() is not 0 and self.btn_One is True:
+                self.tab.setCurrentIndex(0)
+                self.btn_One = False
+        if self.wiimote.buttons['Two']:
+            self.btn_Two = True
+        else:
+            if self.tab.currentIndex() is not 1 and self.btn_Two == True:
+                self.tab.setCurrentIndex(1)
+                self.btn_Two = False
+
         self.update()
 
     def deleteSelectedItem(self, getCurrentTab):
@@ -561,13 +578,12 @@ class Window(QtWidgets.QWidget):
             self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
     def keyPressEvent(self, event):
-        print("K", event.key())
-        print("QT", QtCore.Qt.Key_Return)
         if event.text() == "b":
             self.draw_widget.raise_()
 
     def eventFilter(self, widget, event):
-        if (event.type() == QtCore.QEvent.KeyPress and widget is self.inputToDo):
+        # source from https://stackoverflow.com/questions/20420072/use-keypressevent-to-catch-enter-or-return
+        if event.type() == QtCore.QEvent.KeyPress and widget is self.inputToDo:
             if event.key() == QtCore.Qt.Key_Return:
                 if self.editToDo.text() is not "":
                     self.addNewEntry()
@@ -684,7 +700,6 @@ class Window(QtWidgets.QWidget):
             pass
 
     def addNewEntry(self):
-        print("add")
         self.newEntry = self.editToDo.text()
         self.undoRedoTodo.insert(0, self.newEntry)
         self.undoRedoUpdateLists()
