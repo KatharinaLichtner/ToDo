@@ -29,7 +29,7 @@ class DrawWidget(QtWidgets.QWidget):
         so that a new gesture can be drawn"""
         if event.button() == QtCore.Qt.LeftButton:
             self.draw = True
-            #self.raise_()
+            self.raise_()
 
         self.update()
 
@@ -202,6 +202,7 @@ class Window(QtWidgets.QWidget):
         layoutPopup.addLayout(layoutInput)
         layoutPopup.addLayout(layoutButtons)
         self.inputToDo.setLayout(layoutPopup)
+        self.inputToDo.installEventFilter(self)
 
         # adding layouts tab und Settings to window
         self.layout.addLayout(layoutSettings)
@@ -560,9 +561,18 @@ class Window(QtWidgets.QWidget):
             self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
     def keyPressEvent(self, event):
-        print("K", event)
         if event.text() == "b":
             self.draw_widget.raise_()
+
+    def eventFilter(self, widget, event):
+        # source from https://stackoverflow.com/questions/20420072/use-keypressevent-to-catch-enter-or-return
+        if event.type() == QtCore.QEvent.KeyPress and widget is self.inputToDo:
+            if event.key() == QtCore.Qt.Key_Return:
+                if self.editToDo.text() is not "":
+                    self.addNewEntry()
+                    return True
+        return QtWidgets.QWidget.eventFilter(self, widget, event)
+
 
     """def mousePressEvent(self, event):
         # when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
@@ -672,29 +682,34 @@ class Window(QtWidgets.QWidget):
         else:
             pass
 
+    def addNewEntry(self):
+        self.newEntry = self.editToDo.text()
+        self.undoRedoTodo.insert(0, self.newEntry)
+        self.undoRedoUpdateLists()
+        if self.status == "undo":
+            self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
+            self.undoRedoIndex = -1
+            self.status = ""
+        self.undoRedo.append(self.current[:])
+        self.editToDo.setText("")
+        self.inputToDo.hide()
+        item = QtWidgets.QListWidgetItem(self.newEntry)
+        item.setCheckState(QtCore.Qt.Unchecked)
+        self.toDoList.insertItem(0, item)
+        self.toDoList.setCurrentItem(item)
+
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
-            self.newEntry = self.editToDo.text()
-            self.undoRedoTodo.insert(0, self.newEntry)
-            self.undoRedoUpdateLists()
-            if self.status == "undo":
-                self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
-                self.undoRedoIndex = -1
-                self.status = ""
-            self.undoRedo.append(self.current[:])
-            self.editToDo.setText("")
-            self.inputToDo.hide()
-            item = QtWidgets.QListWidgetItem(self.newEntry)
-            item.setCheckState(0)
-            self.toDoList.insertItem(0, item)
-            self.toDoList.setCurrentItem(item)
+            if self.editToDo.text() is not "":
+                self.addNewEntry()
         elif self.sender().text() == self.cancelButton.text():
-            self.inputToDo.hide()
+             self.inputToDo.hide()
+
 
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
+    #print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
     font_db = QtGui.QFontDatabase()
     font_id = font_db.addApplicationFont("Handlee-Regular.ttf")
     handleeFont = QtGui.QFont("Handlee")
