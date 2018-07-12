@@ -45,7 +45,7 @@ class Recognizer:
         result = "gesture not found"
         gesture = gest
         try:
-            if len(gesture) > 0:
+            if len(gesture) > 1:
                 gesture = self.resample(gesture)
                 gesture = self.rotate(gesture)
                 gesture = self.scale(gesture)
