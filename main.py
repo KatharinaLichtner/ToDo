@@ -301,6 +301,19 @@ class Window(QtWidgets.QWidget):
                 yDelete = self.deleteButton.pos().y()
                 xaddItem = self.newItemButton.pos().x()
                 yaddItem = self.newItemButton.pos().y()
+                xItems = self.editItems.pos().x()
+                yItems = self.editItems.pos().y()
+                xEdit = self.okEditButton.pos().x()
+                yEdit = self.okEditButton.pos().y()
+                xEditCancel = self.cancelEditButton.pos().x()
+                yEditCancel = self.cancelEditButton.pos().y()
+                xInput = self.inputToDo.pos().x()
+                yInput = self.inputToDo.pos().y()
+                xAdd = self.okButton.pos().x()
+                yAdd = self.okButton.pos().y()
+                xAddCancel = self.cancelButton.pos().x()
+                yAddCancel = self.cancelButton.pos().y()
+
                 if x >= xUndo and x <= xUndo + self.undoButton.width() and y >= yUndo and y <= yUndo + self.undoButton.height():
                     self.buttonA = False
                     print("undo")
@@ -320,6 +333,19 @@ class Window(QtWidgets.QWidget):
                     print("addItem")
                     self.buttonA = False
                     self.addnewItem()
+                elif self.editItems.isVisible() and x >= xEdit + xItems and x <= xEdit + self.okEditButton.width() + xItems and y >= yEdit + yItems and y <= yEdit + self.okEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.addEditEntry()
+                elif self.editItems.isVisible() and x >= xEditCancel + xItems and x <= xEditCancel + self.cancelEditButton.width() + xItems and y >= yEditCancel + yItems and y <= yEditCancel + self.cancelEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.editItems.hide()
+                elif self.inputToDo.isVisible() and x >= xAdd + xInput and x <= xAdd + self.okButton.width() + xInput and y >= yAdd + yInput and y <= yAdd + self.okButton.height() + yInput:
+                    self.buttonA = False
+                    self.addNewEntry()
+                elif self.inputToDo.isVisible() and x >= xAddCancel + xInput and x <= xAddCancel + self.cancelButton.width() + xInput and y >= yAddCancel + yInput and y <= yAddCancel + self.cancelButton.height() + yInput:
+                    self.buttonA = False
+                    self.inputToDo.hide()
+
 
                 else:
                     self.deleteSelectedItem(getCurrentTab)
@@ -416,7 +442,6 @@ class Window(QtWidgets.QWidget):
 
                 self.doneList.setCurrentRow(0)
 
-
     def moveItemOneUp(self, getCurrentTab):
         itemTodo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -463,7 +488,6 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(itemDone + 1, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
 
     def moveItemToTop(self, getCurrentTab):
         itemToDo = self.toDoList.currentRow()
@@ -735,6 +759,12 @@ class Window(QtWidgets.QWidget):
                 if self.editToDo.text() is not "":
                     self.addNewEntry()
                     return True
+
+        if event.type() == QtCore.QEvent.KeyPress and widget is self.editItems:
+            if event.key() == QtCore.Qt.Key_Return:
+                if self.editInput.text() is not "":
+                    self.addEditEntry()
+                    return True
         return QtWidgets.QWidget.eventFilter(self, widget, event)
 
     def recognizeDrawing(self, pos):
@@ -787,6 +817,7 @@ class Window(QtWidgets.QWidget):
                 self.editItems.show()
             if self.tabIndex == 1:
                 self.editInput.setText(self.doneList.currentItem().text())
+                self.editItems.show()
 
     def checkItemOnToDoList(self, item):
 
@@ -823,6 +854,7 @@ class Window(QtWidgets.QWidget):
         self.inputToDo.hide()
         item = QtWidgets.QListWidgetItem(self.newEntry)
         item.setCheckState(QtCore.Qt.Unchecked)
+        item.setFlags(item.flags() | QtCore.Qt.ItemIsSelectable)
         self.toDoList.insertItem(0, item)
         self.toDoList.setCurrentItem(item)
         if self.tab.currentIndex() is not 0:
