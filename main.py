@@ -139,8 +139,8 @@ class Window(QtWidgets.QWidget):
     def initUI(self):
         # init window
 
-        # self.setGeometry(0, 0, 1280, 800)
-        self.setGeometry(0, 0, 1920, 950)
+        self.setGeometry(0, 0, 1280, 800)
+        #self.setGeometry(0, 0, 1920, 950)
 
         self.setStyleSheet("background-color: white")
 
@@ -183,7 +183,7 @@ class Window(QtWidgets.QWidget):
         self.toDoList = QtWidgets.QListWidget()
         self.toDoList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        #self.toDoList.setStyleSheet("QListView::item:selected{selection-background-color: pink}")
+        self.toDoList.setStyleSheet("QListView::item:selected{background-color: pink}")
         #self.toDoList.setStyleSheet("QListView::item {color: black}")
 
 
@@ -302,21 +302,52 @@ class Window(QtWidgets.QWidget):
                 yDelete = self.deleteButton.pos().y()
                 xaddItem = self.newItemButton.pos().x()
                 yaddItem = self.newItemButton.pos().y()
+                xItems = self.editItems.pos().x()
+                yItems = self.editItems.pos().y()
+                xEdit = self.okEditButton.pos().x()
+                yEdit = self.okEditButton.pos().y()
+                xEditCancel = self.cancelEditButton.pos().x()
+                yEditCancel = self.cancelEditButton.pos().y()
+                xInput = self.inputToDo.pos().x()
+                yInput = self.inputToDo.pos().y()
+                xAdd = self.okButton.pos().x()
+                yAdd = self.okButton.pos().y()
+                xAddCancel = self.cancelButton.pos().x()
+                yAddCancel = self.cancelButton.pos().y()
+
                 if x >= xUndo and x <= xUndo + self.undoButton.width() and y >= yUndo and y <= yUndo + self.undoButton.height():
                     self.buttonA = False
+                    print("undo")
                     self.undo()
 
                 elif x >= xRedo and x <= xRedo + self.redoButton.width() and y >= yRedo and y <= yRedo + self.redoButton.height():
                     self.buttonA = False
+                    print("redo")
                     self.redo()
 
                 elif x >= xDelete and x <= xDelete + self.deleteButton.width() and y >= yDelete and y <= yDelete + self.deleteButton.height():
+                    print("delete")
                     self.buttonA = False
                     self.delete()
 
                 elif x >= xaddItem and x <= xaddItem + self.newItemButton.width() and y >= yaddItem and y <= yaddItem + self.newItemButton.height():
+                    print("addItem")
                     self.buttonA = False
                     self.addnewItem()
+                elif self.editItems.isVisible() and x >= xEdit + xItems and x <= xEdit + self.okEditButton.width() + xItems and y >= yEdit + yItems and y <= yEdit + self.okEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.addEditEntry()
+                elif self.editItems.isVisible() and x >= xEditCancel + xItems and x <= xEditCancel + self.cancelEditButton.width() + xItems and y >= yEditCancel + yItems and y <= yEditCancel + self.cancelEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.editItems.hide()
+                elif self.inputToDo.isVisible() and x >= xAdd + xInput and x <= xAdd + self.okButton.width() + xInput and y >= yAdd + yInput and y <= yAdd + self.okButton.height() + yInput:
+                    self.buttonA = False
+                    self.addNewEntry()
+                    self.editInput.setText("")
+                elif self.inputToDo.isVisible() and x >= xAddCancel + xInput and x <= xAddCancel + self.cancelButton.width() + xInput and y >= yAddCancel + yInput and y <= yAddCancel + self.cancelButton.height() + yInput:
+                    self.buttonA = False
+                    self.inputToDo.hide()
+                    self.editToDo.setText("")
 
                 else:
                     self.deleteSelectedItem(getCurrentTab)
@@ -343,15 +374,19 @@ class Window(QtWidgets.QWidget):
 
         # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
         if self.wiimote.buttons['Minus'] and self.predicted == 1:
+
+            # print("ganz nach unten")
             self.moveCompleteDown = True
         else:
             self.moveItemToBottom(getCurrentTab)
 
         if self.wiimote.buttons['Up']:
+            print("Pfeil nach oben")
             self.arrowUp = True
         else:
             self.arrowUpReleased(getCurrentTab)
         if self.wiimote.buttons['Down']:
+            print("Pfeil nach unten")
             self.arrowDown = True
         else:
             self.arrowDownReleased(getCurrentTab)
@@ -409,7 +444,6 @@ class Window(QtWidgets.QWidget):
 
                 self.doneList.setCurrentRow(0)
 
-
     def moveItemOneUp(self, getCurrentTab):
         itemTodo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -456,7 +490,6 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(itemDone + 1, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
 
     def moveItemToTop(self, getCurrentTab):
         itemToDo = self.toDoList.currentRow()
@@ -576,6 +609,7 @@ class Window(QtWidgets.QWidget):
         self.undoRedoDoneList()
         self.status = ""
 
+
     def delete(self):
         getCurrentTab = self.tab.currentIndex()
         if getCurrentTab == 0:
@@ -600,6 +634,7 @@ class Window(QtWidgets.QWidget):
                 self.doneList.setCurrentRow(0)
 
     def addnewItem(self):
+        print("addnewitem")
         self.inputToDo.show()
 
 
@@ -717,6 +752,8 @@ class Window(QtWidgets.QWidget):
 
     def keyPressEvent(self, event):
         if event.text() == "b":
+            self.toDoList.clearFocus()
+            self.raiseWidgets()
             self.draw_widget.raise_()
 
     def eventFilter(self, widget, event):
@@ -725,6 +762,12 @@ class Window(QtWidgets.QWidget):
             if event.key() == QtCore.Qt.Key_Return:
                 if self.editToDo.text() is not "":
                     self.addNewEntry()
+                    return True
+
+        if event.type() == QtCore.QEvent.KeyPress and widget is self.editItems:
+            if event.key() == QtCore.Qt.Key_Return:
+                if self.editInput.text() is not "":
+                    self.addEditEntry()
                     return True
         return QtWidgets.QWidget.eventFilter(self, widget, event)
 
@@ -773,14 +816,14 @@ class Window(QtWidgets.QWidget):
                 self.toDoList.setCurrentItem(newItem)
         elif recognized == "Edit":
             self.tabIndex = self.tab.currentIndex()
-            self.editIndex = self.toDoList.currentRow()
             if self.tabIndex == 0:
                 self.editInput.setText(self.toDoList.currentItem().text())
+                self.editIndex = self.toDoList.currentRow()
                 del self.undoRedoTodo[self.editIndex]
                 self.editItems.show()
             if self.tabIndex == 1:
-                self.editIndex = self.doneList.currentRow()
                 self.editInput.setText(self.doneList.currentItem().text())
+                self.editIndex = self.doneList.currentRow()
                 del self.undoRedoDone[self.editIndex]
                 self.editItems.show()
 
@@ -828,7 +871,8 @@ class Window(QtWidgets.QWidget):
             if self.editToDo.text() is not "":
                 self.addNewEntry()
         elif self.sender().text() == self.cancelButton.text():
-             self.inputToDo.hide()
+            self.inputToDo.hide()
+            self.editToDo.setText("")
 
     def addEditEntry(self):
         self.editEntry = self.editInput.text()
@@ -847,11 +891,13 @@ class Window(QtWidgets.QWidget):
             if self.editInput.text() is not "":
                 self.addEditEntry()
         elif self.sender().text() == self.cancelEditButton.text():
-             self.editItems.hide()
+            self.editInput.setText("")
+            self.editItems.hide()
 
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    #print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
     font_db = QtGui.QFontDatabase()
     font_id = font_db.addApplicationFont("Handlee-Regular.ttf")
     handleeFont = QtGui.QFont("Handlee", 25)
