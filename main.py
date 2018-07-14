@@ -14,7 +14,10 @@ import sys
 import activity
 import subprocess
 import cv2
+import matplotlib.pyplot as plt
 from PIL import Image
+import os
+
 
 class DrawWidget(QtWidgets.QWidget):
     def __init__(self, parent):
@@ -160,19 +163,21 @@ class Window(QtWidgets.QWidget):
         self.draw_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
 
         # layoutSettings with undo and redo buttons
-        self.undoButton = QtWidgets.QPushButton("Undo")
+        self.undoButton = QtWidgets.QPushButton("")
         self.undoButton.clicked.connect(self.undo)
-        self.redoButton = QtWidgets.QPushButton("Redo")
+        self.redoButton = QtWidgets.QPushButton("")
         self.redoButton.clicked.connect(self.redo)
-        self.deleteButton = QtWidgets.QPushButton("Delete")
-        self.newItemButton = QtWidgets.QPushButton("New Item")
+        # layoutSettings with add and delete button
+        self.deleteButton = QtWidgets.QPushButton("")
+        self.newItemButton = QtWidgets.QPushButton("")
         self.deleteButton.clicked.connect(self.delete)
         self.deleteButton.setObjectName("deleteButton")
         self.newItemButton.clicked.connect(self.addnewItem)
-        self.deleteButton.setStyleSheet("QPushButton { border-image: url(checked.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
-        self.newItemButton.setStyleSheet("QPushButton { border-image: url(checked.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
-        self.redoButton.setStyleSheet("QPushButton { border-image: url(checked.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
-        self.undoButton.setStyleSheet("QPushButton { border-image: url(checked.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
+        # set an icon to the delete-, add-, undo- and redo-button
+        self.deleteButton.setStyleSheet("QPushButton { border-image: url(delete-button.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
+        self.newItemButton.setStyleSheet("QPushButton { border-image: url(add-button.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
+        self.redoButton.setStyleSheet("QPushButton { border-image: url(redo-button.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
+        self.undoButton.setStyleSheet("QPushButton { border-image: url(undo-button.svg)}" "QPushButton:pressed { border-image: url(unchecked.svg)}")
 
 
         layoutSettings.addWidget(self.deleteButton)
@@ -279,7 +284,7 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(10)
+            self.set_update_rate(20)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
@@ -380,25 +385,24 @@ class Window(QtWidgets.QWidget):
         else:
             self.moveItemOneDown(getCurrentTab)
 
-        # if the 'Plus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the bottom of the list
+        # if the 'Plus'-Button is released an the wiimote is moved slightly up and down the current item will be moved to the bottom of the list
         if self.wiimote.buttons['Plus'] and self.predicted == 1:
             self.moveCompleteUp = True
         else:
             self.moveItemToTop(getCurrentTab)
 
-        # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
+        # if the 'Minus'-Button is released an the wiimote is moved slightly up and down the current item will be moved to the top of the list
         if self.wiimote.buttons['Minus'] and self.predicted == 1:
-
-            # print("ganz nach unten")
             self.moveCompleteDown = True
         else:
             self.moveItemToBottom(getCurrentTab)
 
+        # if the 'Up'-Button is released the higher Item will be selected
         if self.wiimote.buttons['Up']:
-            print("Pfeil nach oben")
             self.arrowUp = True
         else:
             self.arrowUpReleased(getCurrentTab)
+        # if the 'Down'-Button is released the lower Item will be selected
         if self.wiimote.buttons['Down']:
             print("Pfeil nach unten")
             self.arrowDown = True
@@ -417,13 +421,14 @@ class Window(QtWidgets.QWidget):
             if self.tab.currentIndex() is not 1 and self.btn_Two == True:
                 self.tab.setCurrentIndex(1)
                 self.btn_Two = False
-
+        # if the 'Left'-Button is released a website will be opened
         if self.wiimote.buttons['Left']:
             print("links")
             self.leftButton = True
         else:
             self.leftButtonPressed()
             self.leftButton = False
+        # if the 'Right'-button is released a video will be shown
         if self.wiimote.buttons['Right']:
             self.rightButton = True
         else:
@@ -469,7 +474,7 @@ class Window(QtWidgets.QWidget):
             if itemToSelect is not None:
 
                 self.doneList.setCurrentRow(0)
-
+    # the selected item will be positioned one item higher (for do and done list)
     def moveItemOneUp(self, getCurrentTab):
         itemTodo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -493,7 +498,7 @@ class Window(QtWidgets.QWidget):
             self.undoRedoUpdateLists()
             self.doneList.insertItem(itemDone - 1, currentItem)
             self.doneList.setCurrentItem(currentItem)
-
+    # the selected item will be positioned one item lower (for do and done list)
     def moveItemOneDown(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -516,7 +521,7 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(itemDone + 1, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
+    # the selected item will be positioned on the top of the list (for do and done list)
     def moveItemToTop(self, getCurrentTab):
         itemToDo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -542,7 +547,7 @@ class Window(QtWidgets.QWidget):
 
             self.doneList.insertItem(0, currentItem)
             self.doneList.setCurrentItem(currentItem)
-
+    # the selected item will be positioned on the bottom of the list (for do and done list)
     def moveItemToBottom(self, getCurrentTab):
 
             itemToDo = self.toDoList.currentRow()
@@ -570,7 +575,7 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(newitempos, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
+    # the next higher element in the list will be selected (for do and done list)
     def arrowUpReleased(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -595,7 +600,7 @@ class Window(QtWidgets.QWidget):
                 itemToSelect = self.doneList.item(newRow)
                 if currentRow > 0:
                     self.doneList.setCurrentRow(newRow)
-
+    # the next lower element in the list will be selected (for do and done list)
     def arrowDownReleased(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -625,40 +630,28 @@ class Window(QtWidgets.QWidget):
     # if left Button is Pressed while shaking the wiimote from the left to the right side the website will be closed
     def leftButtonPressed(self):
         print("links losgelassen", self.predicted, self.opened, self.leftButton)
-       # website = ""
         if self.predicted == 2 and self.opened is False and self.leftButton is True:
             print("Website öffnen")
             try:
                 self.website = subprocess.Popen(["firefox", "http://www.kamelrechner.eu/de"])
             except:
                 print("Fehler beim öffnen der Website")
-            self.opened = True
-        elif self.predicted == 0 and self.opened is True and self.leftButton is False:
-            print("website schließen")
             self.opened = False
-            try:
-                self.website.kill()
-            except:
-                print("Fehler beim schließen der Website")
+        #elif self.predicted == 0 and self.opened is True and self.leftButton is False:
+         #   print("website schließen")
+         #   self.opened = False
+          #  try:
+          #      self.website.kill()
+           # except:
+            #    print("Fehler beim schließen der Website")
 
-
+    # a video will be shown
     def rightButtonPressed(self):
-        print("rechts losgelassen")
+
         if self.predicted == 2 and self.movieOpened is False and self.rightButton is True:
-            print("starte Video")
-            cap = cv2.VideoCapture("Katzenvideo.mp4")
-            ret, frame = cap.read()
-            while(1):
-                ret, frame = cap.read()
-                cv2.imshow('Cat', frame)
-                if cv2.waitKey(1) and 0xFF == ord('q') or ret == False:
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    break
-                cv2.imshow('Cat', frame)
-            self.movieOpened = True
-        elif self.predicted == 2 and self.movieOpened is True and self.rightButton is False:
-            cv2.destroyAllWindows()
+            filename = "katze.png"
+            self.image = Image.open(filename).show()
+
 
 
     # sets the status of the window to one status backwards
