@@ -12,6 +12,11 @@ from sklearn import svm
 import numpy as np
 import sys
 import activity
+import subprocess
+import cv2
+import matplotlib.pyplot as plt
+from PIL import Image
+import os
 
 
 class DrawWidget(QtWidgets.QWidget):
@@ -23,6 +28,7 @@ class DrawWidget(QtWidgets.QWidget):
         self.pos = []
         self.draw = False
         self.parent = parent
+
 
     def mousePressEvent(self, event):
         """when the left button on the mouse is pressed, the bool for drawing is set true and points are set to None,
@@ -74,12 +80,29 @@ class DrawWidget(QtWidgets.QWidget):
                 self.update()
 
 class Window(QtWidgets.QWidget):
+    on_item_select_todo = QtCore.pyqtSignal(int, QtWidgets.QListWidgetItem)
+    on_item_select_done = QtCore.pyqtSignal(int, str)
+    one_move_up = QtCore.pyqtSignal(int)
+    one_move_down = QtCore.pyqtSignal(int)
+    on_move_up_all = QtCore.pyqtSignal(int)
+    on_move_down_all = QtCore.pyqtSignal(int)
+
     def __init__(self):
         super().__init__()
 
-        #self.btaddr = "18:2A:7B:F3:F8:F5"
+        self.on_item_select_todo.connect(self.on_item_selection_todoList)
+        self.on_item_select_done.connect(self.on_item_select_doneList)
+        self.one_move_up.connect(self.moveItemOneUp)
+        self.one_move_down.connect(self.moveItemOneDown)
+        self.on_move_up_all.connect(self.moveItemToTop)
+        self.one_move_down.connect(self.moveItemToBottom)
+
+
+        self.btaddr = "18:2A:7B:F3:F8:F5"
         #self.btaddr = "B8:AE:6E:1B:AD:A0"
-        self.btaddr = "B8:AE:6E:50:05:32"
+        #self.btaddr = "B8:AE:6E:50:05:32"
+
+        self.mediumvioletred = 'rgb(199,21,133)'
 
         self.wiimote = None
         self._acc_vals = []
@@ -96,6 +119,10 @@ class Window(QtWidgets.QWidget):
 
         self.arrowUp = False
         self.arrowDown = False
+        self.leftButton = False
+        self.opened = False
+        self.rightButton = False
+        self.movieOpened = False
 
         self.btn_One = False
         self.btn_Two = False
@@ -119,6 +146,7 @@ class Window(QtWidgets.QWidget):
         self.undoRedoIndex = -1
         self.status = ""
         self.undoRedoLength = 5
+        self.editIndex = 0
 
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -127,6 +155,7 @@ class Window(QtWidgets.QWidget):
         self.transform = Transform()
         self.qp = QtGui.QPainter()
         self.draw = False
+        self.tabIndex = 0
         self.initUI()
 
         try:
@@ -137,8 +166,8 @@ class Window(QtWidgets.QWidget):
     def initUI(self):
         # init window
 
-        # self.setGeometry(0, 0, 1280, 800)
-        self.setGeometry(0, 0, 1920, 950)
+        self.setGeometry(0, 0, 1280, 800)
+        #self.setGeometry(0, 0, 1920, 950)
 
         self.setStyleSheet("background-color: white")
 
@@ -151,14 +180,34 @@ class Window(QtWidgets.QWidget):
         self.draw_widget.setGeometry(self.x(), self.y(), self.width(), self.height())
 
         # layoutSettings with undo and redo buttons
-        self.undoButton = QtWidgets.QPushButton("Undo")
+        self.undoButton = QtWidgets.QPushButton("")
         self.undoButton.clicked.connect(self.undo)
-        self.redoButton = QtWidgets.QPushButton("Redo")
+        self.redoButton = QtWidgets.QPushButton("")
         self.redoButton.clicked.connect(self.redo)
-        self.deleteButton = QtWidgets.QPushButton("Delete")
-        self.newItemButton = QtWidgets.QPushButton("New Item")
+        # layoutSettings with add and delete button
+        self.deleteButton = QtWidgets.QPushButton("")
+        self.newItemButton = QtWidgets.QPushButton("")
         self.deleteButton.clicked.connect(self.delete)
+        self.deleteButton.setObjectName("deleteButton")
         self.newItemButton.clicked.connect(self.addnewItem)
+        # set an icon to the delete-, add-, undo- and redo-button
+        self.deleteButton.setIcon(QtGui.QIcon('delete-button.svg'))
+        self.deleteButton.setIconSize(QtCore.QSize(50,50))
+        self.deleteButton.setStyleSheet("background-color: " + self.mediumvioletred)
+        self.newItemButton.setIcon(QtGui.QIcon('add-button.svg'))
+        self.newItemButton.setIconSize(QtCore.QSize(50,50))
+        self.newItemButton.setStyleSheet("background-color: " + self.mediumvioletred)
+        self.redoButton.setIcon(QtGui.QIcon('redo-button.svg'))
+        self.redoButton.setIconSize(QtCore.QSize(50,50))
+        self.redoButton.setStyleSheet("background-color: " + self.mediumvioletred)
+        self.undoButton.setIcon(QtGui.QIcon('undo-button.svg'))
+        self.undoButton.setIconSize(QtCore.QSize(50,50))
+        self.undoButton.setStyleSheet("background-color: " + self.mediumvioletred)
+        title = QtWidgets.QLabel("ToDo-List")
+        #title.setAlignment(QtCore.Qt.AlignLeft)
+        title.setStyleSheet("color: " + self.mediumvioletred + "; font-size: 30px; qproperty-alignment: 'AlignCenter'")
+        #layoutSettings.addWidget(title)
+
         layoutSettings.addWidget(self.deleteButton)
         layoutSettings.addWidget(self.newItemButton)
         layoutSettings.addWidget(self.undoButton)
@@ -173,20 +222,19 @@ class Window(QtWidgets.QWidget):
         self.tabDone = QtWidgets.QWidget()
         self.tab.addTab(self.tabToDo, "To Do")
         self.tab.addTab(self.tabDone, "Done")
+        self.tab.setStyleSheet("color: " + self.mediumvioletred)
         self.layoutList.addWidget(self.tab)
 
         # listWidget ToDoList
         # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
-        self.toDoList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        #self.toDoList.setStyleSheet("QListView::item:selected{selection-background-color: pink}")
-        #self.toDoList.setStyleSheet("QListView::item {color: black}")
-
+        p = QtGui.QPalette()
+        p.setColor(QtGui.QPalette.Highlight, QtGui.QColor(199, 21, 133))
+        self.toDoList.setPalette(p)
 
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
-
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
         self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
@@ -194,8 +242,8 @@ class Window(QtWidgets.QWidget):
 
         # listWidget DoneList
         self.doneList = QtWidgets.QListWidget()
-        self.doneList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.doneList.setStyleSheet("QListWidget::indicator:checked{image: url(checked.svg)}")
+        self.doneList.setPalette(p)
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
         self.tabDone.setLayout(layoutListDoneWidget)
@@ -207,17 +255,22 @@ class Window(QtWidgets.QWidget):
 
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
+        self.inputToDo.setStyleSheet("background-color: white")
         layoutPopup = QtWidgets.QVBoxLayout()
         layoutInput = QtWidgets.QVBoxLayout()
         layoutButtons = QtWidgets.QHBoxLayout()
         self.inputToDo.setWindowTitle("New To Do")
         labelInput = QtWidgets.QLabel("Type in new To Do:")
+        #labelInput.setStyleSheet("color: " + self.mediumvioletred)
         self.editToDo = QtWidgets.QLineEdit()
         self.editToDo.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.editToDo.setStyleSheet("QLineEdit:focus{border: 1px solid "+ self.mediumvioletred + "}")
         self.okButton = QtWidgets.QPushButton("OK")
         self.okButton.clicked.connect(self.getNewEntry)
+        self.okButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
         self.cancelButton = QtWidgets.QPushButton("Cancel")
         self.cancelButton.clicked.connect(self.getNewEntry)
+        self.cancelButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
         layoutInput.addWidget(labelInput)
         layoutInput.addWidget(self.editToDo)
         layoutButtons.addWidget(self.cancelButton)
@@ -228,15 +281,49 @@ class Window(QtWidgets.QWidget):
         self.inputToDo.setLayout(layoutPopup)
         self.inputToDo.installEventFilter(self)
 
-        self.inputToDo.installEventFilter(self)
-
+        self.editItems = QtWidgets.QWidget()
+        self.editItems.setStyleSheet("background-color: white")
+        layoutEditPopup = QtWidgets.QVBoxLayout()
+        layoutEditInputPopup = QtWidgets.QVBoxLayout()
+        layoutEditButtons = QtWidgets.QHBoxLayout()
+        self.editItems.setWindowTitle("Edit Item")
+        self.labelEditInput = QtWidgets.QLabel("Edit:")
+        self.editInput = QtWidgets.QLineEdit()
+        self.editInput.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.editInput.setStyleSheet("QLineEdit:focus{border: 1px solid "+ self.mediumvioletred + "}")
+        self.okEditButton = QtWidgets.QPushButton("OK")
+        self.okEditButton.clicked.connect(self.getEditEntry)
+        self.okEditButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
+        self.cancelEditButton = QtWidgets.QPushButton("Cancel")
+        self.cancelEditButton.clicked.connect(self.getEditEntry)
+        self.cancelEditButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
+        layoutEditInputPopup.addWidget(self.labelEditInput)
+        layoutEditInputPopup.addWidget(self.editInput)
+        layoutEditButtons.addWidget(self.cancelEditButton)
+        layoutEditButtons.addWidget(self.okEditButton)
+        layoutEditButtons.setAlignment(QtCore.Qt.AlignBottom)
+        layoutEditPopup.addLayout(layoutEditInputPopup)
+        layoutEditPopup.addLayout(layoutEditButtons)
+        self.editItems.setLayout(layoutEditPopup)
+        self.editItems.installEventFilter(self)
 
         # adding layouts tab und Settings to window
+        self.layout.addWidget(title)
         self.layout.addLayout(layoutSettings)
-
         self.layout.addLayout(self.layoutList)
         self.setLayout(self.layout)
         self.show()
+
+    def on_item_selection_todoList(self, index, item):
+        item.setCheckState(QtCore.Qt.Unchecked)
+        self.toDoList.insertItem(index, item)
+        self.toDoList.setCurrentItem(item)
+
+    def on_item_select_doneList(self, index, item):
+        newItem = QtWidgets.QListWidgetItem(item)
+        newItem.setCheckState(QtCore.Qt.Checked)
+        self.doneList.insertItem(index, newItem)
+        self.doneList.setCurrentItem(newItem)
 
     def connect_wiimote(self):
         self.wiimote = wiimote.connect(self.btaddr)
@@ -244,7 +331,7 @@ class Window(QtWidgets.QWidget):
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
             self.wiimote.buttons.register_callback(self.getPressedButton)
-            self.set_update_rate(10)
+            self.set_update_rate(20)
 
     # gets which button was pressed on the wiimote
     def getPressedButton(self, ev):
@@ -281,8 +368,20 @@ class Window(QtWidgets.QWidget):
                 yDelete = self.deleteButton.pos().y()
                 xaddItem = self.newItemButton.pos().x()
                 yaddItem = self.newItemButton.pos().y()
-                if x >= xUndo and x <= xUndo + self.undoButton.width() and y >= yUndo and y <= yUndo + self.undoButton.height():
+                xItems = self.editItems.pos().x()
+                yItems = self.editItems.pos().y()
+                xEdit = self.okEditButton.pos().x()
+                yEdit = self.okEditButton.pos().y()
+                xEditCancel = self.cancelEditButton.pos().x()
+                yEditCancel = self.cancelEditButton.pos().y()
+                xInput = self.inputToDo.pos().x()
+                yInput = self.inputToDo.pos().y()
+                xAdd = self.okButton.pos().x()
+                yAdd = self.okButton.pos().y()
+                xAddCancel = self.cancelButton.pos().x()
+                yAddCancel = self.cancelButton.pos().y()
 
+                if x >= xUndo and x <= xUndo + self.undoButton.width() and y >= yUndo and y <= yUndo + self.undoButton.height():
                     self.buttonA = False
                     self.undo()
 
@@ -291,12 +390,28 @@ class Window(QtWidgets.QWidget):
                     self.redo()
 
                 elif x >= xDelete and x <= xDelete + self.deleteButton.width() and y >= yDelete and y <= yDelete + self.deleteButton.height():
-                    print("delete")
+
+                    self.buttonA = False
                     self.delete()
 
-                #elif x >= xaddItem and x <= xaddItem + self.newItemButton.width() and y >= yaddItem and y <= yaddItem + self.newItemButton.height():
-                 #   print("addItem")
-                  #  self.addnewItem()
+                elif x >= xaddItem and x <= xaddItem + self.newItemButton.width() and y >= yaddItem and y <= yaddItem + self.newItemButton.height():
+
+                    self.buttonA = False
+                    self.addnewItem()
+                elif self.editItems.isVisible() and x >= xEdit + xItems and x <= xEdit + self.okEditButton.width() + xItems and y >= yEdit + yItems and y <= yEdit + self.okEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.addEditEntry()
+                elif self.editItems.isVisible() and x >= xEditCancel + xItems and x <= xEditCancel + self.cancelEditButton.width() + xItems and y >= yEditCancel + yItems and y <= yEditCancel + self.cancelEditButton.height() + yItems:
+                    self.buttonA = False
+                    self.editItems.hide()
+                elif self.inputToDo.isVisible() and x >= xAdd + xInput and x <= xAdd + self.okButton.width() + xInput and y >= yAdd + yInput and y <= yAdd + self.okButton.height() + yInput:
+                    self.buttonA = False
+                    self.addNewEntry()
+                    self.editInput.setText("")
+                elif self.inputToDo.isVisible() and x >= xAddCancel + xInput and x <= xAddCancel + self.cancelButton.width() + xInput and y >= yAddCancel + yInput and y <= yAddCancel + self.cancelButton.height() + yInput:
+                    self.buttonA = False
+                    self.inputToDo.hide()
+                    self.editToDo.setText("")
 
                 else:
                     self.deleteSelectedItem(getCurrentTab)
@@ -306,40 +421,42 @@ class Window(QtWidgets.QWidget):
         if self.wiimote.buttons['Plus'] and self.predicted == 2:
             self.moveOneUp = True
         else:
-            self.moveItemOneUp(getCurrentTab)
+            self.moveOneUp = False
+            self.one_move_up.emit(getCurrentTab)
 
 
          # if the 'Minus'-Button is released an the wiimote is not moving the current item will be moved down by one element
         if self.wiimote.buttons['Minus'] and self.predicted == 2:
             self.moveOneDown = True
         else:
-            self.moveItemOneDown(getCurrentTab)
+            self.moveOneDown = False
+            self.one_move_down.emit(getCurrentTab)
 
-
-
-        # if the 'Plus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the bottom of the list
+        # if the 'Plus'-Button is released an the wiimote is moved slightly up and down the current item will be moved to the bottom of the list
         if self.wiimote.buttons['Plus'] and self.predicted == 1:
             self.moveCompleteUp = True
         else:
-            self.moveItemToTop(getCurrentTab)
+            self.moveCompleteUp = False
+            self.on_move_up_all.emit(getCurrentTab)
 
-        # if the 'Minus'-Button is released an the wiimote is moved in the shape of a infinity symbol the current item will be moved to the top of the list
+        # if the 'Minus'-Button is released an the wiimote is moved slightly up and down the current item will be moved to the top of the list
         if self.wiimote.buttons['Minus'] and self.predicted == 1:
-
-            # print("ganz nach unten")
             self.moveCompleteDown = True
         else:
-            self.moveItemToBottom(getCurrentTab)
+            self.moveCompleteDown = False
+            self.on_move_down_all.emit(getCurrentTab)
 
+        # if the 'Up'-Button is released the higher Item will be selected
         if self.wiimote.buttons['Up']:
-            print("Pfeil nach oben")
             self.arrowUp = True
         else:
+            self.arrowUp = False
             self.arrowUpReleased(getCurrentTab)
+        # if the 'Down'-Button is released the lower Item will be selected
         if self.wiimote.buttons['Down']:
-            print("Pfeil nach unten")
             self.arrowDown = True
         else:
+            self.arrowDown = False
             self.arrowDownReleased(getCurrentTab)
 
         if self.wiimote.buttons['One']:
@@ -354,6 +471,18 @@ class Window(QtWidgets.QWidget):
             if self.tab.currentIndex() is not 1 and self.btn_Two == True:
                 self.tab.setCurrentIndex(1)
                 self.btn_Two = False
+        # if the 'Left'-Button is released a website will be opened
+        if self.wiimote.buttons['Left']:
+            self.leftButton = True
+        else:
+            self.leftButtonPressed()
+            self.leftButton = False
+        # if the 'Right'-button is released a video will be shown
+        if self.wiimote.buttons['Right']:
+            self.rightButton = True
+        else:
+            self.rightButtonPressed()
+            self.rightButton = False
 
         self.update()
 
@@ -392,10 +521,9 @@ class Window(QtWidgets.QWidget):
             self.doneList.takeItem(item)
             itemToSelect = self.doneList.item(0)
             if itemToSelect is not None:
-
                 self.doneList.setCurrentRow(0)
 
-
+    # the selected item will be positioned one item higher (for do and done list)
     def moveItemOneUp(self, getCurrentTab):
         itemTodo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -410,6 +538,7 @@ class Window(QtWidgets.QWidget):
             self.undoRedoUpdateLists()
             self.toDoList.insertItem(itemTodo - 1, currentItem)
             self.toDoList.setCurrentItem(currentItem)
+            #self.on_item_select_todo.emit(itemTodo -1, currentItem)
 
         elif itemDone is not None and itemDone >= 0 and self.moveOneUp is True and getCurrentTab == 1:
             self.moveOneUp = False
@@ -419,7 +548,9 @@ class Window(QtWidgets.QWidget):
             self.undoRedoUpdateLists()
             self.doneList.insertItem(itemDone - 1, currentItem)
             self.doneList.setCurrentItem(currentItem)
+            #self.on_item_select_done.emit(itemDone - 1 , currentItem)
 
+    # the selected item will be positioned one item lower (for do and done list)
     def moveItemOneDown(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -433,6 +564,7 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.toDoList.insertItem(itemToDo + 1, currentItem)
                 self.toDoList.setCurrentItem(currentItem)
+                #self.on_item_select_todo.emit(itemToDo + 1, currentItem)
 
             elif itemDone is not None and itemDone >= 0 and self.moveOneDown is True and getCurrentTab == 1:
                 self.moveOneDown = False
@@ -442,8 +574,9 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(itemDone + 1, currentItem)
                 self.doneList.setCurrentItem(currentItem)
+                #self.on_item_select_done.emit(itemToDo + 1, currentItem)
 
-
+    # the selected item will be positioned on the top of the list (for do and done list)
     def moveItemToTop(self, getCurrentTab):
         itemToDo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
@@ -455,7 +588,7 @@ class Window(QtWidgets.QWidget):
             del self.undoRedoTodo[itemToDo]
             self.undoRedoTodo.insert(0, currentItem.text())
             self.undoRedoUpdateLists()
-
+            #self.on_item_select_todo.emit(0, currentItem)
             self.toDoList.insertItem(0, currentItem)
             self.toDoList.setCurrentItem(currentItem)
 
@@ -469,7 +602,8 @@ class Window(QtWidgets.QWidget):
 
             self.doneList.insertItem(0, currentItem)
             self.doneList.setCurrentItem(currentItem)
-
+            #self.on_item_select_done.emit(0, currentItem)
+    # the selected item will be positioned on the bottom of the list (for do and done list)
     def moveItemToBottom(self, getCurrentTab):
 
             itemToDo = self.toDoList.currentRow()
@@ -486,6 +620,7 @@ class Window(QtWidgets.QWidget):
 
                 self.toDoList.insertItem(newitempos, currentItem)
                 self.toDoList.setCurrentItem(currentItem)
+                #self.on_item_select_todo.emit(newitempos, currentItem)
 
             elif itemDone is not None and itemDone >= 0 and self.moveCompleteDown is True and getCurrentTab == 1:
 
@@ -497,7 +632,8 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.insertItem(newitempos, currentItem)
                 self.doneList.setCurrentItem(currentItem)
-
+                #self.on_item_select_done.emit(newitempos, currentItem)
+    # the next higher element in the list will be selected (for do and done list)
     def arrowUpReleased(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -514,15 +650,15 @@ class Window(QtWidgets.QWidget):
             elif itemDone is not None and itemDone >= 0 and self.arrowUp is True and getCurrentTab == 1:
 
                 self.arrowUp = False
-                newitempos = len(self.toDoList)
-                currentRow = self.toDoList.currentRow()
+                newitempos = len(self.doneList)
+                currentRow = self.doneList.currentRow()
                 newRow = currentRow -1
 
 
-                itemToSelect = self.toDoList.item(newRow)
+                itemToSelect = self.doneList.item(newRow)
                 if currentRow > 0:
-                    self.toDoList.setCurrentRow(newRow)
-
+                    self.doneList.setCurrentRow(newRow)
+    # the next lower element in the list will be selected (for do and done list)
     def arrowDownReleased(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
@@ -540,12 +676,38 @@ class Window(QtWidgets.QWidget):
             elif itemDone is not None and itemDone >= 0 and self.arrowDown is True and getCurrentTab == 1:
 
                 self.arrowDown = False
-                newitempos = len(self.toDoList)
-                currentRow = self.toDoList.currentRow()
+                newitempos = len(self.doneList)
+                currentRow = self.doneList.currentRow()
                 newRow = currentRow +1
                 if currentRow < newitempos -1:
-                    self.toDoList.setCurrentRow(newRow)
+                    self.doneList.setCurrentRow(newRow)
 
+    # https://stackoverflow.com/questions/33953776/how-to-open-and-close-a-website-using-default-browser-with-python
+    # last access: 13.07.2018
+    # if left Button ist Pressed without moving the wiimote a website will be opened
+    # if left Button is Pressed while shaking the wiimote from the left to the right side the website will be closed
+    def leftButtonPressed(self):
+        if self.predicted == 2 and self.opened is False and self.leftButton is True:
+            print("Website öffnen")
+            try:
+                self.website = subprocess.Popen(["firefox", "http://www.kamelrechner.eu/de"])
+            except:
+                print("Fehler beim öffnen der Website")
+            self.opened = False
+        #elif self.predicted == 0 and self.opened is True and self.leftButton is False:
+         #   print("website schließen")
+         #   self.opened = False
+          #  try:
+          #      self.website.kill()
+           # except:
+            #    print("Fehler beim schließen der Website")
+
+    # a video will be shown
+    def rightButtonPressed(self):
+
+        if self.predicted == 2 and self.movieOpened is False and self.rightButton is True:
+            filename = "katze.png"
+            self.image = Image.open(filename).show()
 
     # sets the status of the window to one status backwards
     def undo(self):
@@ -575,10 +737,20 @@ class Window(QtWidgets.QWidget):
                 itemToSelect = self.toDoList.item(0)
                 if itemToSelect is not None:
                     self.toDoList.setCurrentRow(0)
+        if getCurrentTab == 1:
+            item = self.doneList.currentRow()
+
+            del self.undoRedoDone[item]
+            self.undoRedoUpdateLists()
+            self.doneList.takeItem(item)
+            itemToSelect = self.doneList.item(0)
+            if itemToSelect is not None:
+
+                self.doneList.setCurrentRow(0)
 
     def addnewItem(self):
-        print("deleteButton")
-
+        self.editToDo.setFocus()
+        self.inputToDo.show()
 
     # sets the to do list to a new state
     def undoRedoTodoList(self):
@@ -588,7 +760,8 @@ class Window(QtWidgets.QWidget):
         for i in range(len(self.undoRedoTodo)):
             if len(self.undoRedoTodo) is not 0:
                 item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
-                item.setCheckState(0)
+                #self.on_item_select_todo.emit(0, item)
+                item.setCheckState(QtCore.Qt.Unchecked)
                 self.toDoList.addItem(item)
                 self.toDoList.setCurrentRow(0)
         self.toDoList.show()
@@ -601,7 +774,8 @@ class Window(QtWidgets.QWidget):
         for i in range(len(self.undoRedoDone)):
             if len(self.undoRedoDone) is not 0:
                 item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
-                item.setCheckState(2)
+                #self.on_item_select_done.emit(0, item)
+                item.setCheckState(QtCore.Qt.Checked)
                 self.doneList.addItem(item)
                 self.doneList.setCurrentRow(0)
         self.doneList.show()
@@ -662,7 +836,6 @@ class Window(QtWidgets.QWidget):
         avgfft = abs(avg)
         return avgfft
 
-
     # with the trained data it is possible to predict the current input movement of the wiimote
     def svm(self, data):
         self.c.fit(self.trainingDataTest, self.featureVector)
@@ -694,8 +867,9 @@ class Window(QtWidgets.QWidget):
             self.cursor().setPos(self.mapToGlobal(QtCore.QPoint(x, y)))
 
     def keyPressEvent(self, event):
-
         if event.text() == "b":
+            self.toDoList.clearFocus()
+            self.raiseWidgets()
             self.draw_widget.raise_()
 
     def eventFilter(self, widget, event):
@@ -704,6 +878,12 @@ class Window(QtWidgets.QWidget):
             if event.key() == QtCore.Qt.Key_Return:
                 if self.editToDo.text() is not "":
                     self.addNewEntry()
+                    return True
+
+        if event.type() == QtCore.QEvent.KeyPress and widget is self.editItems:
+            if event.key() == QtCore.Qt.Key_Return:
+                if self.editInput.text() is not "":
+                    self.addEditEntry()
                     return True
         return QtWidgets.QWidget.eventFilter(self, widget, event)
 
@@ -729,16 +909,23 @@ class Window(QtWidgets.QWidget):
             self.editToDo.setFocus()
             self.inputToDo.show()
         elif recognized == "Check":
-            if self.toDoList.currentItem() is not None:
+            if self.toDoList.currentItem() is not None and self.tab.currentIndex() == 0:
                 item = self.toDoList.currentItem()
                 self.undoRedoDone.append(item.text())
                 del self.undoRedoTodo[self.toDoList.row(item)]
                 self.undoRedoUpdateLists()
                 self.toDoList.takeItem(self.toDoList.row(item))
-                newItem = QtWidgets.QListWidgetItem(item.text())
-                newItem.setCheckState(QtCore.Qt.Checked)
-                self.doneList.insertItem(0, newItem)
-                self.doneList.setCurrentItem(newItem)
+                print(item.text())
+                text = item.text()
+                #newItem = QtWidgets.QListWidgetItem(text)
+                #newItem.setCheckState(QtCore.Qt.Checked)
+                #self.doneList.insertItem(0, newItem)
+                #self.doneList.setCurrentItem(newItem)
+               # print("check", newItem.text())
+                self.on_item_select_done.emit(0, text)
+                print("done check")
+                if len(self.toDoList) > 0:
+                    self.toDoList.setCurrentRow(0)
         elif recognized == "Uncheck":
             if self.doneList.currentItem() is not None:
                 item = self.doneList.currentItem()
@@ -747,18 +934,33 @@ class Window(QtWidgets.QWidget):
                 self.undoRedoUpdateLists()
                 self.doneList.takeItem(self.doneList.row(item))
                 newItem = QtWidgets.QListWidgetItem(item.text())
+                #self.on_item_select_todo.emit(0, newItem)
                 newItem.setCheckState(QtCore.Qt.Unchecked)
                 self.toDoList.insertItem(0, newItem)
                 self.toDoList.setCurrentItem(newItem)
+                if len(self.doneList) > 0:
+                    self.doneList.setCurrentRow(0)
+        elif recognized == "Edit":
+            self.tabIndex = self.tab.currentIndex()
+            if self.tabIndex == 0:
+                self.editInput.setText(self.toDoList.currentItem().text())
+                self.editIndex = self.toDoList.currentRow()
+                del self.undoRedoTodo[self.editIndex]
+                self.editItems.show()
+            if self.tabIndex == 1:
+                self.editInput.setText(self.doneList.currentItem().text())
+                self.editIndex = self.doneList.currentRow()
+                del self.undoRedoDone[self.editIndex]
+                self.editItems.show()
 
     def checkItemOnToDoList(self, item):
 
         if item.checkState() == QtCore.Qt.Checked:
             self.toDoList.takeItem(self.toDoList.row(item))
             newItem = QtWidgets.QListWidgetItem(item.text())
-            newItem.setCheckState(QtCore.Qt.Checked)
-            self.doneList.insertItem(0, newItem)
-            self.doneList.setCurrentItem(newItem)
+            #newItem.setCheckState(QtCore.Qt.Checked)
+            #self.doneList.insertItem(0, newItem)
+            self.on_item_select_done.emit(0, newItem)
 
         else:
             pass
@@ -767,9 +969,9 @@ class Window(QtWidgets.QWidget):
         if item.checkState() == QtCore.Qt.Unchecked:
             self.doneList.takeItem(self.doneList.row(item))
             newItem = QtWidgets.QListWidgetItem(item.text())
-            newItem.setCheckState(QtCore.Qt.Unchecked)
-            self.toDoList.insertItem(0, newItem)
-            self.toDoList.setCurrentItem(newItem)
+            #newItem.setCheckState(QtCore.Qt.Unchecked)
+            #self.toDoList.insertItem(0, newItem)
+            self.on_item_select_todo.emit(0, newItem)
         else:
             pass
 
@@ -781,20 +983,43 @@ class Window(QtWidgets.QWidget):
             self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
             self.undoRedoIndex = -1
             self.status = ""
-        self.undoRedo.append(self.current[:])
         self.editToDo.setText("")
         self.inputToDo.hide()
         item = QtWidgets.QListWidgetItem(self.newEntry)
         item.setCheckState(QtCore.Qt.Unchecked)
         self.toDoList.insertItem(0, item)
         self.toDoList.setCurrentItem(item)
+        #self.on_item_select_todo.emit(0, item)
+        if self.tab.currentIndex() is not 0:
+            self.tab.setCurrentIndex(0)
 
     def getNewEntry(self):
         if self.sender().text() == self.okButton.text():
             if self.editToDo.text() is not "":
                 self.addNewEntry()
         elif self.sender().text() == self.cancelButton.text():
-             self.inputToDo.hide()
+            self.inputToDo.hide()
+            self.editToDo.setText("")
+
+    def addEditEntry(self):
+        self.editEntry = self.editInput.text()
+        self.editInput.setText("")
+        self.editItems.hide()
+        if self.tabIndex == 0:
+            self.toDoList.currentItem().setText(self.editEntry)
+            self.undoRedoTodo.insert(self.editIndex, self.editEntry)
+        if self.tabIndex == 1:
+            self.doneList.currentItem().setText(self.editEntry)
+            self.undoRedoDone.insert(self.editIndex, self.editEntry)
+        self.undoRedoUpdateLists()
+
+    def getEditEntry(self):
+        if self.sender().text() == self.okEditButton.text():
+            if self.editInput.text() is not "":
+                self.addEditEntry()
+        elif self.sender().text() == self.cancelEditButton.text():
+            self.editInput.setText("")
+            self.editItems.hide()
 
 
 def main():
@@ -802,7 +1027,7 @@ def main():
     #print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
     font_db = QtGui.QFontDatabase()
     font_id = font_db.addApplicationFont("Handlee-Regular.ttf")
-    handleeFont = QtGui.QFont("Handlee")
+    handleeFont = QtGui.QFont("Handlee", 25)
     app.setFont(handleeFont)
     w = Window()
     sys.exit(app.exec_())
