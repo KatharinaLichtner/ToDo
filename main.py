@@ -87,6 +87,8 @@ class Window(QtWidgets.QWidget):
         #self.btaddr = "B8:AE:6E:1B:AD:A0"
         #self.btaddr = "B8:AE:6E:50:05:32"
 
+        self.mediumvioletred = 'rgb(199,21,133)'
+
         self.wiimote = None
         self._acc_vals = []
         self._bufferX = np.array([])
@@ -176,12 +178,16 @@ class Window(QtWidgets.QWidget):
         # set an icon to the delete-, add-, undo- and redo-button
         self.deleteButton.setIcon(QtGui.QIcon('delete-button.svg'))
         self.deleteButton.setIconSize(QtCore.QSize(50,50))
+        self.deleteButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.newItemButton.setIcon(QtGui.QIcon('add-button.svg'))
         self.newItemButton.setIconSize(QtCore.QSize(50,50))
+        self.newItemButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.redoButton.setIcon(QtGui.QIcon('redo-button.svg'))
         self.redoButton.setIconSize(QtCore.QSize(50,50))
+        self.redoButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.undoButton.setIcon(QtGui.QIcon('undo-button.svg'))
         self.undoButton.setIconSize(QtCore.QSize(50,50))
+        self.undoButton.setStyleSheet("background-color: " + self.mediumvioletred)
 
         layoutSettings.addWidget(self.deleteButton)
         layoutSettings.addWidget(self.newItemButton)
@@ -203,14 +209,12 @@ class Window(QtWidgets.QWidget):
         # transparent background from source https://stackoverflow.com/questions/27497209/how-to-make-a-qwidget-based-
         # window-have-a-transparent-background
         self.toDoList = QtWidgets.QListWidget()
-        self.toDoList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
 
-        self.toDoList.setStyleSheet("QListView::item:selected{background-color: pink}")
-        #self.toDoList.setStyleSheet("QListView::item {color: black}")
-
+        p = QtGui.QPalette()
+        p.setColor(QtGui.QPalette.Highlight, QtGui.QColor(199, 21, 133))
+        self.toDoList.setPalette(p)
 
         layoutListToDoWidget = QtWidgets.QHBoxLayout()
-
         layoutListToDoWidget.addWidget(self.toDoList)
         self.tabToDo.setLayout(layoutListToDoWidget)
         self.tabToDo.setAttribute(QtCore.Qt.WA_TranslucentBackground)
@@ -218,8 +222,8 @@ class Window(QtWidgets.QWidget):
 
         # listWidget DoneList
         self.doneList = QtWidgets.QListWidget()
-        self.doneList.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.doneList.setStyleSheet("QListWidget::indicator:checked{image: url(checked.svg)}")
+        self.doneList.setPalette(p)
         layoutListDoneWidget = QtWidgets.QHBoxLayout()
         layoutListDoneWidget.addWidget(self.doneList)
         self.tabDone.setLayout(layoutListDoneWidget)
@@ -231,17 +235,22 @@ class Window(QtWidgets.QWidget):
 
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
+        self.inputToDo.setStyleSheet("background-color: white")
         layoutPopup = QtWidgets.QVBoxLayout()
         layoutInput = QtWidgets.QVBoxLayout()
         layoutButtons = QtWidgets.QHBoxLayout()
         self.inputToDo.setWindowTitle("New To Do")
         labelInput = QtWidgets.QLabel("Type in new To Do:")
+        #labelInput.setStyleSheet("color: " + self.mediumvioletred)
         self.editToDo = QtWidgets.QLineEdit()
         self.editToDo.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.editToDo.setStyleSheet("QLineEdit:focus{border: 1px solid "+ self.mediumvioletred + "}")
         self.okButton = QtWidgets.QPushButton("OK")
         self.okButton.clicked.connect(self.getNewEntry)
+        self.okButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
         self.cancelButton = QtWidgets.QPushButton("Cancel")
         self.cancelButton.clicked.connect(self.getNewEntry)
+        self.cancelButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
         layoutInput.addWidget(labelInput)
         layoutInput.addWidget(self.editToDo)
         layoutButtons.addWidget(self.cancelButton)
@@ -253,6 +262,7 @@ class Window(QtWidgets.QWidget):
         self.inputToDo.installEventFilter(self)
 
         self.editItems = QtWidgets.QWidget()
+        self.editItems.setStyleSheet("background-color: white")
         layoutEditPopup = QtWidgets.QVBoxLayout()
         layoutEditInputPopup = QtWidgets.QVBoxLayout()
         layoutEditButtons = QtWidgets.QHBoxLayout()
@@ -260,10 +270,13 @@ class Window(QtWidgets.QWidget):
         self.labelEditInput = QtWidgets.QLabel("Edit:")
         self.editInput = QtWidgets.QLineEdit()
         self.editInput.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.editInput.setStyleSheet("QLineEdit:focus{border: 1px solid "+ self.mediumvioletred + "}")
         self.okEditButton = QtWidgets.QPushButton("OK")
         self.okEditButton.clicked.connect(self.getEditEntry)
+        self.okEditButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
         self.cancelEditButton = QtWidgets.QPushButton("Cancel")
         self.cancelEditButton.clicked.connect(self.getEditEntry)
+        self.cancelEditButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
         layoutEditInputPopup.addWidget(self.labelEditInput)
         layoutEditInputPopup.addWidget(self.editInput)
         layoutEditButtons.addWidget(self.cancelEditButton)
@@ -931,6 +944,7 @@ class Window(QtWidgets.QWidget):
         item.setCheckState(QtCore.Qt.Unchecked)
         self.toDoList.insertItem(0, item)
         self.toDoList.setCurrentItem(item)
+        #item.setBackground(QtGui.QColor(255, 105, 180))
         if self.tab.currentIndex() is not 0:
             self.tab.setCurrentIndex(0)
 
