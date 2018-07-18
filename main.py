@@ -60,7 +60,10 @@ class DrawWidget(QtWidgets.QWidget):
         """the cursor movement is drawn if bool for drawing is true"""
         if self.draw:
             self.qp.begin(self)
-            self.qp.setPen(QtGui.QColor(255, 105, 180))
+            self.pen = QtGui.QPen()
+            self.pen.setColor(QtGui.QColor(255, 105, 180))
+            self.pen.setWidth(10)
+            self.qp.setPen(self.pen)
             if len(self.pos) > 1:
                 for i in range(len(self.pos)-1):
                     self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
@@ -532,7 +535,7 @@ class Window(QtWidgets.QWidget):
                 self.todoIndex = itemToDo + 1
                 self.undoRedoUpdateLists()
                 self.toDoList.insertItem(itemToDo + 1, currentItem)
-                self.toDoList.setCurrentItem(currentItem)
+                self.toDoList.setCurrentItem(currentItedem)
                 #self.on_item_select_todo.emit(itemToDo + 1, currentItem)
 
             elif itemDone is not None and itemDone >= 0 and self.moveOneDown is True and getCurrentTab == 1:
@@ -721,7 +724,7 @@ class Window(QtWidgets.QWidget):
                 self.toDoList.takeItem(item)
                 itemToSelect = self.toDoList.item(0)
                 if itemToSelect is not None:
-                    self.toDoList.setCurrentRow(0)
+                    self.on_item_select_todo.emit(0, itemToSelect)
         if getCurrentTab == 1:
             item = self.doneList.currentRow()
             self.doneIndex = item
@@ -733,7 +736,7 @@ class Window(QtWidgets.QWidget):
             self.doneList.takeItem(item)
             itemToSelect = self.doneList.item(0)
             if itemToSelect is not None:
-                self.doneList.setCurrentRow(0)
+                self.doneList.setCurrentItem(itemToSelect)
 
     def addnewItem(self):
         self.editToDo.setFocus()
@@ -926,6 +929,14 @@ class Window(QtWidgets.QWidget):
         if len(self.pos) > 0:
             recognized = self.recognizer.recognizeGesture(self.pos)
             self.recognizedAction(recognized)
+
+    # source: jupyter notebook "Signals, Noise, Filters", ITT
+    #def moving_average(self, pos):
+     #   filtered_signal = []
+      #  width = 10
+       # for i in range(len(pos)):
+        #    filtered_signal.append(sum(pos[i][i-width:i]/width))
+        #return filtered_signal
 
     def raiseWidgets(self):
         self.undoButton.raise_()
