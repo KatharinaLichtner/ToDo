@@ -102,8 +102,8 @@ class Window(QtWidgets.QWidget):
 
 
         #self.btaddr = "18:2A:7B:F3:F8:F5"
-        self.btaddr = "B8:AE:6E:1B:AD:A0"
-        #self.btaddr = "B8:AE:6E:50:05:32"
+        #self.btaddr = "B8:AE:6E:1B:AD:A0"
+        self.btaddr = "B8:AE:6E:50:05:32"
 
         self.mediumvioletred = 'rgb(199,21,133)'
 
@@ -119,6 +119,8 @@ class Window(QtWidgets.QWidget):
         self.moveOneDown = False
         self.moveCompleteDown = False
         self.moveCompleteUp = False
+        self.undoOne = False
+        self.redoTwo = False
 
         self.arrowUp = False
         self.arrowDown = False
@@ -484,6 +486,20 @@ class Window(QtWidgets.QWidget):
                 self.tab.setCurrentIndex(1)
                 self.btn_Two = False
 
+        if self.wiimote.buttons['One']:
+            self.undoOne = True
+        else:
+            if self.undoOne == True:
+                self.undoOne = False
+                self.undo()
+
+        if self.wiimote.buttons['Two']:
+            self.redoTwo = True
+        else:
+            if self.redoTwo == True:
+                self.redoTwo = False
+                self.redo()
+
         self.update()
 
     # the selected item will be positioned one item higher (for do and done list)
@@ -535,7 +551,7 @@ class Window(QtWidgets.QWidget):
                 self.todoIndex = itemToDo + 1
                 self.undoRedoUpdateLists()
                 self.toDoList.insertItem(itemToDo + 1, currentItem)
-                self.toDoList.setCurrentItem(currentItedem)
+                self.toDoList.setCurrentItem(currentItem)
                 #self.on_item_select_todo.emit(itemToDo + 1, currentItem)
 
             elif itemDone is not None and itemDone >= 0 and self.moveOneDown is True and getCurrentTab == 1:
