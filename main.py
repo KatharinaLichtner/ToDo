@@ -60,7 +60,10 @@ class DrawWidget(QtWidgets.QWidget):
         """the cursor movement is drawn if bool for drawing is true"""
         if self.draw:
             self.qp.begin(self)
-            self.qp.setPen(QtGui.QColor(255, 105, 180))
+            self.pen = QtGui.QPen()
+            self.pen.setColor(QtGui.QColor(255, 105, 180))
+            self.pen.setWidth(10)
+            self.qp.setPen(self.pen)
             if len(self.pos) > 1:
                 for i in range(len(self.pos)-1):
                     self.qp.drawLine(self.pos[i][0], self.pos[i][1], self.pos[i+1][0], self.pos[i+1][1])
@@ -87,7 +90,7 @@ class Window(QtWidgets.QWidget):
     on_move_up_all = QtCore.pyqtSignal(int)
     on_move_down_all = QtCore.pyqtSignal(int)
 
-    def __init__(self):
+    def __init__(self, wm, addr):
         super().__init__()
 
         self.on_item_select_todo.connect(self.on_item_selection_todoList)
@@ -97,14 +100,14 @@ class Window(QtWidgets.QWidget):
         self.on_move_up_all.connect(self.moveItemToTop)
         self.one_move_down.connect(self.moveItemToBottom)
 
-
+        self.btaddr = addr
         #self.btaddr = "18:2A:7B:F3:F8:F5"
-        self.btaddr = "B8:AE:6E:1B:AD:A0"
+        #self.btaddr = "B8:AE:6E:1B:AD:A0"
         #self.btaddr = "B8:AE:6E:50:05:32"
 
         self.mediumvioletred = 'rgb(199,21,133)'
 
-        self.wiimote = None
+        self.wiimote = wm
         self._acc_vals = []
         self._bufferX = np.array([])
         self._bufferY = np.array([])
@@ -116,6 +119,8 @@ class Window(QtWidgets.QWidget):
         self.moveOneDown = False
         self.moveCompleteDown = False
         self.moveCompleteUp = False
+        self.undoOne = False
+        self.redoTwo = False
 
         self.arrowUp = False
         self.arrowDown = False
@@ -175,9 +180,9 @@ class Window(QtWidgets.QWidget):
 
         self.setStyleSheet("background-color: white")
 
-        self.layout = QtWidgets.QVBoxLayout()
-        layoutSettings = QtWidgets.QHBoxLayout()
-        self.layoutList = QtWidgets.QHBoxLayout()
+        self.layout = QtWidgets.QHBoxLayout()
+        layoutSettings = QtWidgets.QVBoxLayout()
+        self.layoutList = QtWidgets.QVBoxLayout()
 
         self.draw_widget = DrawWidget(self)
         self.draw_widget.setParent(self)
@@ -196,27 +201,28 @@ class Window(QtWidgets.QWidget):
         self.newItemButton.clicked.connect(self.addnewItem)
         # set an icon to the delete-, add-, undo- and redo-button
         self.deleteButton.setIcon(QtGui.QIcon('delete-button.svg'))
-        self.deleteButton.setIconSize(QtCore.QSize(50,50))
+        self.deleteButton.setIconSize(QtCore.QSize(150, 150))
         self.deleteButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.newItemButton.setIcon(QtGui.QIcon('add-button.svg'))
-        self.newItemButton.setIconSize(QtCore.QSize(50,50))
+        self.newItemButton.setIconSize(QtCore.QSize(150, 150))
         self.newItemButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.redoButton.setIcon(QtGui.QIcon('redo-button.svg'))
-        self.redoButton.setIconSize(QtCore.QSize(50,50))
+        self.redoButton.setIconSize(QtCore.QSize(150, 150))
         self.redoButton.setStyleSheet("background-color: " + self.mediumvioletred)
         self.undoButton.setIcon(QtGui.QIcon('undo-button.svg'))
-        self.undoButton.setIconSize(QtCore.QSize(50,50))
+        self.undoButton.setIconSize(QtCore.QSize(150, 150))
         self.undoButton.setStyleSheet("background-color: " + self.mediumvioletred)
         title = QtWidgets.QLabel("ToDo-List")
-        title.setStyleSheet("color: " + self.mediumvioletred + "; font-size: 30px; qproperty-alignment: 'AlignCenter'")
+        title.setStyleSheet("color: " + self.mediumvioletred + "; font-size: 80px; qproperty-alignment: 'AlignCenter'")
+        self.layoutList.addWidget(title)
 
         layoutSettings.addWidget(self.deleteButton)
         layoutSettings.addWidget(self.newItemButton)
         layoutSettings.addWidget(self.undoButton)
 
         layoutSettings.addWidget(self.redoButton)
-        layoutSettings.setAlignment(QtCore.Qt.AlignTop)
-        layoutSettings.setAlignment(QtCore.Qt.AlignRight)
+        layoutSettings.setAlignment(QtCore.Qt.AlignBottom)
+        #layoutSettings.setAlignment(QtCore.Qt.AlignRight)
 
         # init tabs
         self.tab = QtWidgets.QTabWidget()
@@ -250,7 +256,6 @@ class Window(QtWidgets.QWidget):
         layoutListDoneWidget.addWidget(self.doneList)
         self.tabDone.setLayout(layoutListDoneWidget)
 
-
         self.toDoList.itemClicked.connect(self.checkItemOnToDoList)
         self.doneList.itemClicked.connect(self.checkItemOnDoneList)
 
@@ -258,6 +263,7 @@ class Window(QtWidgets.QWidget):
         # init Popup
         self.inputToDo = QtWidgets.QWidget()
         self.inputToDo.setStyleSheet("background-color: white")
+        self.inputToDo.setGeometry(0,0, self.width()/2, self.height()/4)
         layoutPopup = QtWidgets.QVBoxLayout()
         layoutInput = QtWidgets.QVBoxLayout()
         layoutButtons = QtWidgets.QHBoxLayout()
@@ -268,11 +274,14 @@ class Window(QtWidgets.QWidget):
         self.editToDo.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.editToDo.setStyleSheet("QLineEdit:focus{border: 1px solid "+ self.mediumvioletred + "}")
         self.okButton = QtWidgets.QPushButton("OK")
+        self.okButton.setFixedHeight(80)
         self.okButton.clicked.connect(self.getNewEntry)
         self.okButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
         self.cancelButton = QtWidgets.QPushButton("Cancel")
         self.cancelButton.clicked.connect(self.getNewEntry)
         self.cancelButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
+        self.cancelButton.setFixedHeight(80)
+
         layoutInput.addWidget(labelInput)
         layoutInput.addWidget(self.editToDo)
         layoutButtons.addWidget(self.cancelButton)
@@ -285,6 +294,7 @@ class Window(QtWidgets.QWidget):
 
         self.editItems = QtWidgets.QWidget()
         self.editItems.setStyleSheet("background-color: white")
+        self.editItems.setGeometry(0, 0, self.width()/2, self.height()/4)
         layoutEditPopup = QtWidgets.QVBoxLayout()
         layoutEditInputPopup = QtWidgets.QVBoxLayout()
         layoutEditButtons = QtWidgets.QHBoxLayout()
@@ -296,9 +306,13 @@ class Window(QtWidgets.QWidget):
         self.okEditButton = QtWidgets.QPushButton("OK")
         self.okEditButton.clicked.connect(self.getEditEntry)
         self.okEditButton.setStyleSheet("background-color: " + self.mediumvioletred + "; border-radius: 2px ; color: white")
+        self.okEditButton.setFixedHeight(80)
+
         self.cancelEditButton = QtWidgets.QPushButton("Cancel")
         self.cancelEditButton.clicked.connect(self.getEditEntry)
         self.cancelEditButton.setStyleSheet("color: " + self.mediumvioletred + "; border-radius: 2px ; border: 1px solid " + self.mediumvioletred)
+        self.cancelEditButton.setFixedHeight(80)
+
         layoutEditInputPopup.addWidget(self.labelEditInput)
         layoutEditInputPopup.addWidget(self.editInput)
         layoutEditButtons.addWidget(self.cancelEditButton)
@@ -310,9 +324,8 @@ class Window(QtWidgets.QWidget):
         self.editItems.installEventFilter(self)
 
         # adding layouts tab und Settings to window
-        self.layout.addWidget(title)
-        self.layout.addLayout(layoutSettings)
         self.layout.addLayout(self.layoutList)
+        self.layout.addLayout(layoutSettings)
         self.setLayout(self.layout)
         self.show()
 
@@ -328,7 +341,20 @@ class Window(QtWidgets.QWidget):
         self.doneList.setCurrentItem(newItem)
 
     def connect_wiimote(self):
-        self.wiimote = wiimote.connect(self.btaddr)
+        #input("Press the 'sync' button on the back of your Wiimote Plus or "
+        #              "enter the the MAC adress of your Wiimote \n" +
+        #              "Press <return> once the Wiimote's LEDs start blinking. \n")
+
+      #  if len(sys.argv) == 1:
+       #     addr, name = wiimote.find()[0]
+       # elif len(sys.argv) == 2:
+       #     addr = sys.argv[1]
+       #     name = None
+       # elif len(sys.argv) == 3:
+       #     addr, name = sys.argv[1:3]
+       # print(("Connecting to %s (%s)" % (name, addr)))
+       # wm = wiimote.connect(addr, name)
+       # self.wiimote = wiimote.connect(self.btaddr)
 
         if self.wiimote is not None:
             self.wiimote.ir.register_callback(self.process_wiimote_ir_data)
@@ -407,8 +433,9 @@ class Window(QtWidgets.QWidget):
                     self.editItems.hide()
                 elif self.inputToDo.isVisible() and x >= xAdd + xInput and x <= xAdd + self.okButton.width() + xInput and y >= yAdd + yInput and y <= yAdd + self.okButton.height() + yInput:
                     self.buttonA = False
-                    self.addNewEntry()
-                    self.editInput.setText("")
+                    if self.editToDo.text() is not "":
+                        self.addNewEntry()
+                        self.editToDo.setText("")
                 elif self.inputToDo.isVisible() and x >= xAddCancel + xInput and x <= xAddCancel + self.cancelButton.width() + xInput and y >= yAddCancel + yInput and y <= yAddCancel + self.cancelButton.height() + yInput:
                     self.buttonA = False
                     self.inputToDo.hide()
@@ -459,18 +486,32 @@ class Window(QtWidgets.QWidget):
         else:
             self.arrowDownReleased(getCurrentTab)
 
-        if self.wiimote.buttons['One']:
+        if self.wiimote.buttons['Left']:
             self.btn_One = True
         else:
             if self.tab.currentIndex() is not 0 and self.btn_One is True:
                 self.tab.setCurrentIndex(0)
                 self.btn_One = False
-        if self.wiimote.buttons['Two']:
+        if self.wiimote.buttons['Right']:
             self.btn_Two = True
         else:
             if self.tab.currentIndex() is not 1 and self.btn_Two == True:
                 self.tab.setCurrentIndex(1)
                 self.btn_Two = False
+
+        if self.wiimote.buttons['One']:
+            self.undoOne = True
+        else:
+            if self.undoOne == True:
+                self.undoOne = False
+                self.undo()
+
+        if self.wiimote.buttons['Two']:
+            self.redoTwo = True
+        else:
+            if self.redoTwo == True:
+                self.redoTwo = False
+                self.redo()
 
         self.update()
 
@@ -632,6 +673,8 @@ class Window(QtWidgets.QWidget):
                 if currentRow > 0:
                     self.doneList.setCurrentRow(newRow)
 
+            print(itemToDo, itemDone)
+
     # the next lower element in the list will be selected (for do and done list)
     def arrowDownReleased(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
@@ -712,19 +755,19 @@ class Window(QtWidgets.QWidget):
                 self.toDoList.takeItem(item)
                 itemToSelect = self.toDoList.item(0)
                 if itemToSelect is not None:
-                    self.toDoList.setCurrentRow(0)
+                    self.on_item_select_todo.emit(0, itemToSelect)
         if getCurrentTab == 1:
             item = self.doneList.currentRow()
             self.doneIndex = item
             self.todoIndex = self.toDoList.currentRow()
             #self.undoRedoIndicesUpdate(1)
             del self.undoRedoDone[item]
-            self.doneList = 0
+            self.doneIndex = 0
             self.undoRedoUpdateLists()
             self.doneList.takeItem(item)
             itemToSelect = self.doneList.item(0)
             if itemToSelect is not None:
-                self.doneList.setCurrentRow(0)
+                self.doneList.setCurrentItem(itemToSelect)
 
     def addnewItem(self):
         self.editToDo.setFocus()
@@ -888,9 +931,10 @@ class Window(QtWidgets.QWidget):
 
     def keyPressEvent(self, event):
         if event.text() == "b":
-            self.toDoList.clearFocus()
+            #self.toDoList.clearFocus()
             self.raiseWidgets()
             self.draw_widget.raise_()
+            self.draw_widget.setFocusPolicy(QtCore.Qt.StrongFocus)
 
     def eventFilter(self, widget, event):
         # source from https://stackoverflow.com/questions/20420072/use-keypressevent-to-catch-enter-or-return
@@ -905,6 +949,10 @@ class Window(QtWidgets.QWidget):
                 if self.editInput.text() is not "":
                     self.addEditEntry()
                     return True
+
+        #if event.type() == QtCore.QEvent.MouseButtonPress and widget is self.toDoList:
+
+
         return QtWidgets.QWidget.eventFilter(self, widget, event)
 
     def recognizeDrawing(self, pos):
@@ -912,6 +960,14 @@ class Window(QtWidgets.QWidget):
         if len(self.pos) > 0:
             recognized = self.recognizer.recognizeGesture(self.pos)
             self.recognizedAction(recognized)
+
+    # source: jupyter notebook "Signals, Noise, Filters", ITT
+    #def moving_average(self, pos):
+     #   filtered_signal = []
+      #  width = 10
+       # for i in range(len(pos)):
+        #    filtered_signal.append(sum(pos[i][i-width:i]/width))
+        #return filtered_signal
 
     def raiseWidgets(self):
         self.undoButton.raise_()
@@ -1059,10 +1115,32 @@ def main():
     #print(app.desktop().screenGeometry().width(), app.desktop().screenGeometry().height())
     font_db = QtGui.QFontDatabase()
     font_id = font_db.addApplicationFont("Handlee-Regular.ttf")
-    handleeFont = QtGui.QFont("Handlee", 25)
+    handleeFont = QtGui.QFont("Handlee", 50)
     app.setFont(handleeFont)
-    w = Window()
+    wiimote_connection()
+
     sys.exit(app.exec_())
+
+def wiimote_connection():
+    try:
+        #self.connect_wiimote()
+        input("Press the 'sync' button on the back of your Wiimote Plus or "
+              "enter the the MAC adress of your Wiimote \n" +
+              "Press <return> once the Wiimote's LEDs start blinking. \n")
+
+        if len(sys.argv) == 1:
+            addr, name = wiimote.find()[0]
+        elif len(sys.argv) == 2:
+            addr = sys.argv[1]
+            name = None
+        elif len(sys.argv) == 3:
+            addr, name = sys.argv[1:3]
+        print(("Connecting to %s (%s)" % (name, addr)))
+        wm = wiimote.connect(addr, name)
+        w = Window(wm, addr)
+
+    except Exception as e:
+        print(e, ", no wiimote found")
 
 
 if __name__ == '__main__':
