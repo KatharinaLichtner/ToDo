@@ -2,13 +2,13 @@
 # coding: utf-8
 # -*- coding: utf-8 -*-
 
-from PyQt5 import QtWidgets, QtCore
-import main as mainFile
+# memento pattern was used here, source: Skript "Undo", Session 17, ITT
 
 class UndoRedo():
 
-    # init status arrays for undo and redo
+    # inits all important variables for undo and redo
     def __init__(self):
+        super(UndoRedo, self).__init__()
         self.current = []
         self.undoRedo = [[[],[]]]
         self.undoRedoTodo = []
@@ -17,16 +17,14 @@ class UndoRedo():
         self.status = ""
         self.undoRedoLength = 5
         self.editIndex = 0
-        self.toDoList = mainFile.Window.toDoList
-        self.doneList = mainFile.Window.doneList
 
     # sets the status of the window to one status backwards
     def undo(self):
-        print("undo")
         self.undoRedoIndex -= 1
         self.undoRedoTodoList()
         self.undoRedoDoneList()
         self.status = "undo"
+        return self.undoRedoTodo, self.undoRedoDone
 
     # sets the status of the window to one status forward
     def redo(self):
@@ -35,38 +33,20 @@ class UndoRedo():
         self.undoRedoTodoList()
         self.undoRedoDoneList()
         self.status = ""
+        return  self.undoRedoTodo, self.undoRedoDone
 
-        # sets the to do list to a new state
+    # gets the updated to do list for undo or redo if there is any status left
     def undoRedoTodoList(self):
-        print("undoRedoTodoList")
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
-        self.todoList.clear()
-        print("todoList", self.toDoList.count())
-        print("undoredotodo", self.undoRedoTodo)
-        if len(self.undoRedoTodo) > 0:
-            for i in range(len(self.undoRedoTodo)):
-                item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
-                item.setCheckState(QtCore.Qt.Unchecked)
-                self.toDoList.addItem(item)
-            print(self.toDoList.item(0).text())
-           # print(self.toDoList.item(1).text())
-            self.toDoList.setCurrentRow(0)
-            print("item", self.toDoList.item(0).text())
 
-    # sets the done list to a new state
+
+    # gets the updated done list for undo or redo if there is any status left
     def undoRedoDoneList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoDone = self.undoRedo[self.undoRedoIndex][1][:]
-        self.doneList.clear()
-        if len(self.undoRedoDone) > 0:
-            for i in range(len(self.undoRedoDone)):
-                item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
-                item.setCheckState(QtCore.Qt.Checked)
-                self.doneList.addItem(item)
-            self.doneList.setCurrentRow(0)
 
-    # if a action like add, remove, check, uncheck was made, the tod o and undo lists are updated
+    # if a action like add, remove, check, uncheck was made, the to do and undo lists are updated
     def undoRedoUpdateLists(self):
         self.current = []
         self.current.append(self.undoRedoTodo[:])
@@ -85,6 +65,7 @@ class UndoRedo():
             length = len(self.undoRedo) - self.undoRedoLength
             self.undoRedo = self.undoRedo[length:][:]
 
+    # a new entry is inserted and if there was a redo before, all the status afterwards are deleted
     def updateListsAddNewEntry(self, newEntry):
         self.undoRedoTodo.insert(0, newEntry)
         if self.status == "undo":
@@ -92,6 +73,7 @@ class UndoRedo():
             self.undoRedoIndex = -1
             self.status = ""
 
+    # looks if it is the to do or the done tab, deletes the old item and adds the new edited one
     def updateListsEditEntry(self, tab, editIndex, editEntry):
         if tab == 0:
             del self.undoRedoTodo[editIndex]
@@ -100,16 +82,17 @@ class UndoRedo():
             del self.undoRedoDone[editIndex]
             self.undoRedoDone.insert(editIndex, editEntry)
 
-    def updateListsUncheck(self, item, newItem):
-        self.undoRedoTodo.append(item.text())
-        del self.undoRedoDone[self.toDoList.row(item)]
-        self.toDoList.insertItem(0, newItem)
-        self.toDoList.setCurrentItem(newItem)
+    # the unchecked item is appended to the to do list and deleted of the done list
+    def updateListsUncheck(self, row, text):
+        self.undoRedoTodo.append(text)
+        del self.undoRedoDone[row]
 
+    # the checked item is appended to the done list and deleted of the to do list
     def updateListsCheck(self, text, x):
         self.undoRedoDone.append(text)
         del self.undoRedoTodo[x]
 
+    # the item is deleted of the list that is given
     def updateListsDelete(self, tab, item):
         if item is not -1:
             if tab == 0:
@@ -118,50 +101,50 @@ class UndoRedo():
                 del self.undoRedoDone[item]
             self.undoRedoUpdateLists()
 
+    # sets the item one position up in the to do list
     def updateListsOneItemUpTodo(self, itemTodo, currentItem):
-        self.moveOneUp = False
         del self.undoRedoTodo[itemTodo]
         self.undoRedoTodo.insert(itemTodo - 1, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item one position up in the done list
     def updateListsOneItemUpDone(self, itemDone, currentItem):
         del self.undoRedoDone[itemDone]
         self.undoRedoDone.insert(itemDone - 1, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item one position down in the to do list
     def updateListsOneItemDownTodo(self, itemTodo, currentItem):
         del self.undoRedoTodo[itemTodo]
         self.undoRedoTodo.insert(itemTodo + 1, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item one position down in the done list
     def updateListsOneItemDownDone(self, itemDone, currentItem):
         del self.undoRedoDone[itemDone]
         self.undoRedoDone.insert(itemDone + 1, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item to the top of the to do list
     def updateListsItemToTopTodo(self, itemTodo, currentItem):
         del self.undoRedoTodo[itemTodo]
         self.undoRedoTodo.insert(0, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item on the top of the done list
     def updateListsItemToTopDone(self, itemDone, currentItem):
         del self.undoRedoDone[itemDone]
         self.undoRedoDone.insert(0, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item on the buttom of the to do list
     def updateListsItemToBottomTodo(self, itemTodo, currentItem, newitempos):
         del self.undoRedoTodo[itemTodo]
         self.undoRedoTodo.insert(newitempos, currentItem.text())
         self.undoRedoUpdateLists()
 
+    # sets the item on the bottom of the done list
     def updateListsItemToBottomDone(self, itemDone, currentItem, newitempos):
         del self.undoRedoDone[itemDone]
         self.undoRedoDone.insert(newitempos, currentItem.text())
         self.undoRedoUpdateLists()
-
-def main():
-    app = UndoRedo()
-
-
-if __name__ == '__main__':
-    main()
