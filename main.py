@@ -13,6 +13,7 @@ import numpy as np
 import sys
 import training_activity
 import fft_svm
+import undo_redo
 import subprocess
 import cv2
 import matplotlib.pyplot as plt
@@ -94,16 +95,6 @@ class Window(QtWidgets.QWidget):
         self.fourier = []
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_all_sensors)
-
-        # init status arrays for undo and redo
-        self.current = []
-        self.undoRedo = [[[],[]]]
-        self.undoRedoTodo = []
-        self.undoRedoDone = []
-        self.undoRedoIndex = -1
-        self.status = ""
-        self.undoRedoLength = 5
-        self.editIndex = 0
 
         self.pos = []
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
