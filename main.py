@@ -15,10 +15,7 @@ import training_activity
 import fft_svm
 import undo_redo
 import subprocess
-import cv2
-import matplotlib.pyplot as plt
-from PIL import Image
-import os
+import webbrowser
 
 
 class Window(QtWidgets.QWidget):
@@ -75,6 +72,7 @@ class Window(QtWidgets.QWidget):
         self.moveCompleteUp = False
         self.undoOne = False
         self.redoTwo = False
+        self.home = False
 
         self.arrowUp = False
         self.arrowDown = False
@@ -353,14 +351,14 @@ class Window(QtWidgets.QWidget):
                         if y >= yUndo:
                             if y <= yUndo + self.undoButton.height():
                                 self.buttonA = False
-                                self.on_undo_clicked.emit()
+                                undo_redo.UndoRedo.undo(self)
 
                 if x >= xRedo:
                     if x <= xRedo + self.redoButton.width():
                         if y >= yRedo:
                             if y <= yRedo + self.redoButton.height():
                                 self.buttonA = False
-                                self.redo()
+
                 if x >= xDelete:
                     if x <= xDelete + self.deleteButton.width():
                         if y >= yDelete:
@@ -473,14 +471,21 @@ class Window(QtWidgets.QWidget):
         else:
             if self.undoOne:
                 self.undoOne = False
-                self.undo()
+                undo_redo.UndoRedo.undo(self)
 
         if self.wiimote.buttons['Two']:
             self.redoTwo = True
         else:
             if self.redoTwo:
                 self.redoTwo = False
-                self.redo()
+                undo_redo.UndoRedo.redo(self)
+
+        if self.wiimote.buttons['Home']:
+            self.home = True
+        else:
+            if self.home is True:
+                webbrowser.open("https://www.youtube.com/watch?v=Z2XmDshWkgg")
+                self.home = False
 
         self.update()
 
@@ -489,76 +494,75 @@ class Window(QtWidgets.QWidget):
         itemTodo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
 
-        if itemTodo is not None and itemTodo >= 0 and self.moveOneUp is True and getCurrentTab == 0:
-            self.moveOneUp = False
+        if itemTodo is not None:
+            if itemTodo >= 0:
+                if self.moveOneUp is True:
+                    if getCurrentTab == 0:
+                        self.moveOneUp = False
+                        currentItem = self.toDoList.takeItem(itemTodo)
+                        undo_redo.UndoRedo.updateListsOneItemUpTodo(self, itemTodo, currentItem)
+                        self.toDoList.insertItem(itemTodo - 1, currentItem)
+                        self.toDoList.setCurrentRow(itemTodo - 1)
 
-            currentItem = self.toDoList.takeItem(itemTodo)
-
-            del self.undoRedoTodo[itemTodo]
-            self.undoRedoTodo.insert(itemTodo - 1, currentItem.text())
-            self.undoRedoUpdateLists()
-            self.toDoList.insertItem(itemTodo - 1, currentItem)
-            self.toDoList.setCurrentRow(itemTodo - 1)
-
-        elif itemDone is not None and itemDone >= 0 and self.moveOneUp is True and getCurrentTab == 1:
-            self.moveOneUp = False
-            currentItem = self.doneList.takeItem(itemDone)
-            del self.undoRedoDone[itemDone]
-            self.undoRedoDone.insert(itemDone - 1, currentItem.text())
-            self.undoRedoUpdateLists()
-            self.doneList.insertItem(itemDone - 1, currentItem)
-            self.doneList.setCurrentRow(itemDone - 1)
+        if itemDone is not None:
+            if itemDone >= 0:
+                if self.moveOneUp is True:
+                    if getCurrentTab == 1:
+                        self.moveOneUp = False
+                        currentItem = self.doneList.takeItem(itemDone)
+                        undo_redo.UndoRedo.updateListsOneItemUpDone(self, itemDone, currentItem)
+                        self.doneList.insertItem(itemDone - 1, currentItem)
+                        self.doneList.setCurrentRow(itemDone - 1)
 
     # the selected item will be positioned one item lower (for do and done list)
     def moveItemOneDown(self, getCurrentTab):
             itemToDo = self.toDoList.currentRow()
             itemDone = self.doneList.currentRow()
 
-            if itemToDo is not None and itemToDo >= 0 and self.moveOneDown is True and getCurrentTab == 0:
-                self.moveOneDown = False
+            if itemToDo is not None:
+                if itemToDo >= 0:
+                    if self.moveOneDown is True:
+                        if getCurrentTab == 0:
+                            self.moveOneDown = False
+                            currentItem = self.toDoList.takeItem(itemToDo)
+                            undo_redo.UndoRedo.updateListsOneItemDownTodo(self, itemToDo, currentItem)
+                            self.toDoList.insertItem(itemToDo + 1, currentItem)
+                            self.toDoList.setCurrentRow(itemToDo + 1)
 
-                currentItem = self.toDoList.takeItem(itemToDo)
-                del self.undoRedoTodo[itemToDo]
-                self.undoRedoTodo.insert(itemToDo + 1, currentItem.text())
-                self.undoRedoUpdateLists()
-                self.toDoList.insertItem(itemToDo + 1, currentItem)
-                self.toDoList.setCurrentRow(itemToDo + 1)
-
-            if itemDone is not None and itemDone >= 0 and self.moveOneDown is True and getCurrentTab == 1:
-                self.moveOneDown = False
-                currentItem = self.doneList.takeItem(itemDone)
-                del self.undoRedoDone[itemDone]
-                self.undoRedoDone.insert(itemDone + 1, currentItem.text())
-                self.undoRedoUpdateLists()
-                self.doneList.insertItem(itemDone + 1, currentItem)
-                self.doneList.setCurrentRow(itemDone + 1)
+            if itemDone is not None:
+                if itemDone >= 0:
+                    if self.moveOneDown is True:
+                        if getCurrentTab == 1:
+                            self.moveOneDown = False
+                            currentItem = self.doneList.takeItem(itemDone)
+                            undo_redo.UndoRedo.updateListsOneItemDownDone(self, itemDone, currentItem)
+                            self.doneList.insertItem(itemDone + 1, currentItem)
+                            self.doneList.setCurrentRow(itemDone + 1)
 
     # the selected item will be positioned on the top of the list (for do and done list)
     def moveItemToTop(self, getCurrentTab):
         itemToDo = self.toDoList.currentRow()
         itemDone = self.doneList.currentRow()
 
-        if itemToDo is not None and itemToDo >= 0 and self.moveCompleteUp is True and getCurrentTab == 0:
-            self.moveCompleteUp = False
+        if itemToDo is not None:
+            if itemToDo >= 0:
+                if self.moveCompleteUp is True:
+                    if getCurrentTab == 0:
+                        self.moveCompleteUp = False
+                        currentItem = self.toDoList.takeItem(itemToDo)
+                        undo_redo.UndoRedo.updateListsItemToTopTodo(self, itemToDo, currentItem)
+                        self.toDoList.insertItem(0, currentItem)
+                        self.toDoList.setCurrentRow(0)
 
-            currentItem = self.toDoList.takeItem(itemToDo)
-            del self.undoRedoTodo[itemToDo]
-            self.undoRedoTodo.insert(0, currentItem.text())
-            self.undoRedoUpdateLists()
-
-            self.toDoList.insertItem(0, currentItem)
-            self.toDoList.setCurrentRow(0)
-
-        if itemDone is not None and itemDone >= 0 and self.moveCompleteUp is True and getCurrentTab == 1:
-            self.moveCompleteUp = False
-
-            currentItem = self.doneList.takeItem(itemDone)
-            del self.undoRedoDone[itemDone]
-            self.undoRedoDone.insert(0, currentItem.text())
-            self.undoRedoUpdateLists()
-
-            self.doneList.insertItem(0, currentItem)
-            self.doneList.setCurrentRow(0)
+        if itemDone is not None:
+            if itemDone >= 0:
+                if self.moveCompleteUp is True:
+                    if getCurrentTab == 1:
+                        self.moveCompleteUp = False
+                        currentItem = self.doneList.takeItem(itemDone)
+                        undo_redo.UndoRedo.updateListsItemToTopDone(self, itemDone, currentItem)
+                        self.doneList.insertItem(0, currentItem)
+                        self.doneList.setCurrentRow(0)
 
     # the selected item will be positioned on the bottom of the list (for do and done list)
     def moveItemToBottom(self, getCurrentTab):
@@ -573,10 +577,7 @@ class Window(QtWidgets.QWidget):
                             self.moveCompleteDown = False
                             newitempos = len(self.toDoList)
                             currentItem = self.toDoList.takeItem(itemToDo)
-                            del self.undoRedoTodo[itemToDo]
-                            self.undoRedoTodo.insert(newitempos, currentItem.text())
-                            self.undoRedoUpdateLists()
-
+                            undo_redo.UndoRedo.updateListsItemToBottomTodo(self, itemToDo, currentItem, newitempos)
                             self.toDoList.insertItem(newitempos, currentItem)
                             self.toDoList.setCurrentRow(newitempos)
 
@@ -587,9 +588,7 @@ class Window(QtWidgets.QWidget):
                             self.moveCompleteDown = False
                             newitempos = len(self.doneList)
                             currentItem = self.doneList.takeItem(itemDone)
-                            del self.undoRedoDone[itemDone]
-                            self.undoRedoDone.insert(newitempos, currentItem.text())
-                            self.undoRedoUpdateLists()
+                            undo_redo.UndoRedo.updateListsItemToBottomDone(self, itemToDo, currentItem, newitempos)
                             self.doneList.insertItem(newitempos, currentItem)
                             self.doneList.setCurrentRow(newitempos)
 
@@ -670,100 +669,26 @@ class Window(QtWidgets.QWidget):
            # except:
             #    print("Fehler beim schließen der Website")
 
-    # a video will be shown
-    def rightButtonPressed(self):
-
-        if self.predicted == 2 and self.movieOpened is False and self.rightButton is True:
-            filename = "katze.png"
-            self.image = Image.open(filename).show()
-
-    # sets the status of the window to one status backwards
-    def undo(self):
-        print("undo")
-        self.undoRedoIndex -= 1
-        self.undoRedoTodoList()
-        self.undoRedoDoneList()
-        self.status = "undo"
-
-    # sets the status of the window to one status forward
-    def redo(self):
-        if self.undoRedoIndex + 1 <= -1:
-            self.undoRedoIndex += 1
-        self.undoRedoTodoList()
-        self.undoRedoDoneList()
-        self.status = ""
-
     def delete(self):
         getCurrentTab = self.tab.currentIndex()
         if getCurrentTab == 0:
             item = self.toDoList.currentRow()
             if item is not -1:
-                del self.undoRedoTodo[item]
-                self.undoRedoUpdateLists()
                 self.toDoList.takeItem(item)
                 if len(self.toDoList) > 0:
                     self.toDoList.setCurrentRow(0)
-                    #self.on_item_select_todo.emit(0, itemToSelect)
+            undo_redo.UndoRedo.updateListsDelete(self, getCurrentTab, item)
         if getCurrentTab == 1:
             item = self.doneList.currentRow()
             if item is not -1:
-                self.undoRedoUpdateLists()
                 self.doneList.takeItem(item)
                 if len(self.doneList) > 0:
                     self.doneList.setCurrentRow(0)
+            undo_redo.UndoRedo.updateListsDelete(self, getCurrentTab, item)
 
     def addnewItem(self):
         self.editToDo.setFocus()
         self.inputToDo.show()
-
-    # sets the to do list to a new state
-    def undoRedoTodoList(self):
-        print("undoRedoTodoList")
-        if len(self.undoRedo) + self.undoRedoIndex >= 0:
-            self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
-        self.toDoList.clear()
-        print("todoList", self.toDoList.count())
-        print("undoredotodo", self.undoRedoTodo)
-        if len(self.undoRedoTodo) > 0:
-            for i in range(len(self.undoRedoTodo)):
-                item = QtWidgets.QListWidgetItem(self.undoRedoTodo[i])
-                item.setCheckState(QtCore.Qt.Unchecked)
-                self.toDoList.addItem(item)
-            print(self.toDoList.item(0).text())
-           # print(self.toDoList.item(1).text())
-            self.toDoList.setCurrentRow(0)
-            print("item", self.toDoList.item(0).text())
-
-    # sets the done list to a new state
-    def undoRedoDoneList(self):
-        if len(self.undoRedo) + self.undoRedoIndex >= 0:
-            self.undoRedoDone = self.undoRedo[self.undoRedoIndex][1][:]
-        self.doneList.clear()
-        if len(self.undoRedoDone) > 0:
-            for i in range(len(self.undoRedoDone)):
-                item = QtWidgets.QListWidgetItem(self.undoRedoDone[i])
-                item.setCheckState(QtCore.Qt.Checked)
-                self.doneList.addItem(item)
-            self.doneList.setCurrentRow(0)
-
-    # if a action like add, remove, check, uncheck was made, the tod o and undo lists are updated
-    def undoRedoUpdateLists(self):
-        self.current = []
-        self.current.append(self.undoRedoTodo[:])
-        self.current.append(self.undoRedoDone[:])
-        print("current", self.current)
-
-        if self.status == "undo":
-            self.undoRedo = self.undoRedo[:(self.undoRedoIndex + 1)][:]
-            self.undoRedoIndex = -1
-            self.status = ""
-
-        self.undoRedo.append(self.current[:])
-        print("undoredo", self.undoRedo)
-
-        if len(self.undoRedo) > self.undoRedoLength:
-            length = len(self.undoRedo) - self.undoRedoLength
-            self.undoRedo = self.undoRedo[length:][:]
 
     def set_update_rate(self, rate):
         if rate == 0:  # use callbacks for max. update rate
@@ -783,8 +708,6 @@ class Window(QtWidgets.QWidget):
         if len(self.fourier) >= 32:
             fft_svm.ActivityRecognzer.svm(self, fftData)
             self.update()
-
-
 
     def update_accel(self, acc_vals):
         self._acc_vals = acc_vals
@@ -882,12 +805,8 @@ class Window(QtWidgets.QWidget):
                 if self.tab.currentIndex() == 0:
                     item = self.toDoList.currentItem()
                     text = item.text()
-                    self.undoRedoDone.append(text)
 
                     x = self.toDoList.row(item)
-
-                    del self.undoRedoTodo[x]
-
                     self.toDoList.takeItem(x)
 
                     newItem = QtWidgets.QListWidgetItem(text)
@@ -900,36 +819,30 @@ class Window(QtWidgets.QWidget):
                         self.toDoList.item(0).setSelected(True)
                         self.toDoList.setFocus()
 
-                    self.undoRedoUpdateLists()
+                    undo_redo.UndoRedo.undoRedoUpdateLists(self)
                     self.app.processEvents()
 
         if recognized == "Uncheck":
             if self.doneList.currentItem() is not None:
                 item = self.doneList.currentItem()
-                self.undoRedoTodo.append(item.text())
-                del self.undoRedoDone[self.toDoList.row(item)]
                 self.doneList.takeItem(self.doneList.row(item))
                 newItem = QtWidgets.QListWidgetItem(item.text())
                 newItem.setCheckState(QtCore.Qt.Unchecked)
-                self.toDoList.insertItem(0, newItem)
-                self.toDoList.setCurrentItem(newItem)
-
+                undo_redo.UndoRedo.updateListsUncheck(self, item, newItem)
                 if self.doneList.count() > 0:
                     print(self.doneList.item(0).text())
                     self.doneList.setCurrentRow(0)
-                self.undoRedoUpdateLists()
+                undo_redo.UndoRedo.undoRedoUpdateLists(self)
 
         if recognized == "Edit":
             self.tabIndex = self.tab.currentIndex()
             if self.tabIndex == 0:
                 self.editInput.setText(self.toDoList.currentItem().text())
                 self.editIndex = self.toDoList.currentRow()
-                del self.undoRedoTodo[self.editIndex]
                 self.editItems.show()
             if self.tabIndex == 1:
                 self.editInput.setText(self.doneList.currentItem().text())
                 self.editIndex = self.doneList.currentRow()
-                del self.undoRedoDone[self.editIndex]
                 self.editItems.show()
 
     def checkItemOnToDoList(self, item):
@@ -948,18 +861,14 @@ class Window(QtWidgets.QWidget):
 
     def addNewEntry(self):
         self.newEntry = self.editToDo.text()
-        self.undoRedoTodo.insert(0, self.newEntry)
-        if self.status == "undo":
-            self.undoRedo = self.undoRedo[:self.undoRedoIndex + 1][:]
-            self.undoRedoIndex = -1
-            self.status = ""
+        undo_redo.UndoRedo.updateListsAddNewEntry(self, self.newEntry)
         self.editToDo.setText("")
         self.inputToDo.hide()
         item = QtWidgets.QListWidgetItem(self.newEntry)
         item.setCheckState(QtCore.Qt.Unchecked)
         self.toDoList.insertItem(0, item)
         self.toDoList.setCurrentItem(item)
-        self.undoRedoUpdateLists()
+        undo_redo.UndoRedo.undoRedoUpdateLists(self)
         if self.tab.currentIndex() is not 0:
             self.tab.setCurrentIndex(0)
 
@@ -977,11 +886,10 @@ class Window(QtWidgets.QWidget):
         self.editItems.hide()
         if self.tabIndex == 0:
             self.toDoList.currentItem().setText(self.editEntry)
-            self.undoRedoTodo.insert(self.editIndex, self.editEntry)
         if self.tabIndex == 1:
             self.doneList.currentItem().setText(self.editEntry)
-            self.undoRedoDone.insert(self.editIndex, self.editEntry)
-        self.undoRedoUpdateLists()
+        undo_redo.UndoRedo.updateListsEditEntry(self, self.tabIndex, self.editIndex, self.editEntry)
+        undo_redo.UndoRedo.undoRedoUpdateLists(self)
 
     def getEditEntry(self):
         if self.sender().text() == self.okEditButton.text():
