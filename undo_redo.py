@@ -4,13 +4,14 @@
 
 # memento pattern was used here, source: Skript "Undo", Session 17, ITT
 
+
 class UndoRedo():
 
     # inits all important variables for undo and redo
     def __init__(self):
         super(UndoRedo, self).__init__()
         self.current = []
-        self.undoRedo = [[[],[]]]
+        self.undoRedo = [[[], []]]
         self.undoRedoTodo = []
         self.undoRedoDone = []
         self.undoRedoIndex = -1
@@ -33,13 +34,12 @@ class UndoRedo():
         self.undoRedoTodoList()
         self.undoRedoDoneList()
         self.status = ""
-        return  self.undoRedoTodo, self.undoRedoDone
+        return self.undoRedoTodo, self.undoRedoDone
 
     # gets the updated to do list for undo or redo if there is any status left
     def undoRedoTodoList(self):
         if len(self.undoRedo) + self.undoRedoIndex >= 0:
             self.undoRedoTodo = self.undoRedo[self.undoRedoIndex][0][:]
-
 
     # gets the updated done list for undo or redo if there is any status left
     def undoRedoDoneList(self):
@@ -51,16 +51,12 @@ class UndoRedo():
         self.current = []
         self.current.append(self.undoRedoTodo[:])
         self.current.append(self.undoRedoDone[:])
-        print("current", self.current)
-
         if self.status == "undo":
             self.undoRedo = self.undoRedo[:(self.undoRedoIndex + 1)][:]
             self.undoRedoIndex = -1
             self.status = ""
 
         self.undoRedo.append(self.current[:])
-        print("undoredo", self.undoRedo)
-
         if len(self.undoRedo) > self.undoRedoLength:
             length = len(self.undoRedo) - self.undoRedoLength
             self.undoRedo = self.undoRedo[length:][:]
