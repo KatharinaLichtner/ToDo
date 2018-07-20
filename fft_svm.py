@@ -4,6 +4,10 @@
 
 import numpy as np
 
+# Katharina Lichtner
+# oriented at jupyter notebooks "dft_tour" and "machine_learning_tour"
+# from the course Interaktionstechniken und -technologien
+
 
 class ActivityRecognzer():
     def __init__(self):
@@ -12,7 +16,7 @@ class ActivityRecognzer():
         self._bufferZ = np.array([])
 
     # fft reads in the accelerometer data of x-,y- and z-axis.
-    # calculate the peaks of the raw data from every movement with the furier transformations
+    # calculate frequency components of the raw data from every movement with the furier transformations
     def fft(self, x, y, z):
         size = 32
         self._bufferX = np.append(self._bufferX, x)
@@ -40,7 +44,6 @@ class ActivityRecognzer():
         predicted = self.c.predict([data[1:]])
         self.predicted = predicted[0]
         return self.predicted
-
 
 
 def main():
