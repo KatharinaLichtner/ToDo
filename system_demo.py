@@ -77,8 +77,8 @@ class Window(QtWidgets.QWidget):
         except Exception as e:
             print(e, ", no wiimote found")
 
-#source of icons of the buttons https://material.io/tools/icons/?style=baseline
-# last access: 20.07.2018
+    # source of icons of the buttons https://material.io/tools/icons/?style=baseline
+    # last access: 20.07.2018
     def initUI(self):
         # init window
 
